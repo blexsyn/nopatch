@@ -1,101 +1,101 @@
 # nopatch
 
-[中文文档](./README.zh.md)
+[English](README.en.md)
 
-A lightweight CLI tool for patching and templating npm packages.
+轻量级 npm 包补丁与模板工具。
 
 ---
 
-## Installation
+## 安装
 
 ```bash
 npm install nopatch --save-dev
 ```
 
-That's it. The `postinstall` hook is automatically added to your `package.json` on install.
+就这些。安装时会自动在你的 `package.json` 中注入 `postinstall` 钩子，无需手动配置。
 
-**Requirements**
+**依赖要求**
 - Node.js >= 16
 - git
 
 ---
 
-## Commands
+## 命令
 
-| Command | Description |
+| 命令 | 说明 |
 |---|---|
-| `nopatch <pkg>` | Create patch for a package |
-| `nopatch` | Apply all patches + templates (postinstall) |
-| `nopatch --patch <pkg>` | Apply patch for specific package |
-| `nopatch --tpl <pkg>` | Initialize template dirs for a package |
-| `nopatch --debug` | Show detailed debug output |
-| `nopatch --help` | Show help |
+| `nopatch <pkg>` | 为包创建补丁 |
+| `nopatch` | 应用所有补丁和模板（postinstall） |
+| `nopatch --patch <pkg>` | 应用指定包的补丁 |
+| `nopatch --tpl <pkg>` | 初始化包的模板目录 |
+| `nopatch --debug` | 显示详细调试日志 |
+| `nopatch --help` | 显示帮助 |
 
 ---
 
-## Patching
+## 补丁
 
-### Create a patch
+### 创建补丁
 
-1. Modify files inside `node_modules/<pkg>/` as needed.
+1. 直接修改 `node_modules/<pkg>/` 中的文件。
 
-2. Run:
+2. 执行：
    ```bash
    nopatch braces
    nopatch @scope/package
    ```
 
-3. Patch files are saved to:
+3. 补丁文件保存到：
    ```
    nopatch/nopatch_record/braces+3.0.3/
    nopatch/nopatch_record/@scope/package+1.0.0/
    ```
 
-### Patch file types
+### 补丁文件类型
 
-| Suffix | Meaning |
+| 后缀 | 含义 |
 |---|---|
-| `.patch` | Text diff (git unified diff format) |
-| `.nopatch_latest.<ext>` | Binary or large file replacement |
-| `.nopatch_delete` | Marks a deleted file (contains timestamp) |
+| `.patch` | 文本差异文件（git unified diff 格式） |
+| `.nopatch_latest.<ext>` | 二进制或大文件替换 |
+| `.nopatch_delete` | 标记删除的文件（内容为时间戳） |
 
-### Ignore config
+### 忽略配置
 
-On first run, an ignore file is auto-created:
+首次运行时自动创建忽略配置文件：
 
 ```
 nopatch/nopatch_ignore/braces+3.0.3.gitignore
 nopatch/nopatch_ignore/@scope/package+1.0.0.gitignore
 ```
 
-Uses `.gitignore` syntax. Default ignored dirs: `node_modules/`, `build/`, `dist/`, `.cache/`, `coverage/`.
+使用 `.gitignore` 语法。默认忽略目录：`node_modules/`、`build/`、`dist/`、`.cache/`、`coverage/`。
 
 ---
 
-## Templates
+## 模板
 
-Templates are applied **after** patches on every `npm install`.
+模板在每次 `npm install` 时在补丁之后执行。
 
-### Initialize
+### 初始化
 
 ```bash
 nopatch --tpl braces
 nopatch --tpl @scope/package
 ```
 
-This creates:
+这会创建：
 
 ```
-nopatch/tpl_record/braces+3.0.3/        # place template files here
+nopatch/tpl_record/braces+3.0.3/        # 在此放置模板文件
 nopatch/tpl_config/braces+3.0.3/
-  data.toml                              # variables + dynamic path config
+  data.toml                              # 变量和动态路径配置
 ```
 
-### Template files
+### 模板文件
 
-- Files with `.mustache` suffix: content is rendered with [Mustache](https://mustache.github.io/), output filename has `.mustache` removed.
-- Other files: copied as-is, only output path supports variable substitution.
-- Files **not** listed in `[[dyna_file_path]]` are output to the same relative path inside `node_modules/<pkg>/`.
+- `.mustache` 后缀的文件：内容使用 Mustache 渲染，输出文件名去掉 `.mustache` 后缀。
+- 其他文件：原样复制，仅输出路径支持变量替换。
+- 未在 `[[dyna_file_path]]` 中配置的文件，默认输出到 `node_modules/<pkg>/` 的对应相对路径。
 
 ### data.toml
 
@@ -107,37 +107,37 @@ pkgname_path = "com/example/myapp"
 [[dyna_file_path]]
 src       = "wxapi/WXEntryActivity.java.mustache"
 dest      = "android/app/src/main/java/{{pkgname_path}}/wxapi/WXEntryActivity.java"
-overwrite = false   # skip if target already exists (default: true)
+overwrite = false   # 目标存在时跳过（默认：true）
 
 [[dyna_file_path]]
 src      = "assets/icon.png"
 destRoot = "../../android/app/src/main/res/drawable/icon.png"
 ```
 
-### Path fields
+### 路径字段
 
-| Field | Base |
+| 字段 | 基准 |
 |---|---|
-| `dest` | `process.cwd()` (project root) |
+| `dest` | `process.cwd()`（项目根目录） |
 | `destRoot` | `node_modules/<pkg>/` |
-| `destAbs` | OS root (absolute path) |
+| `destAbs` | 操作系统根目录（绝对路径） |
 
-All path fields support Mustache variable substitution.
+所有路径字段均支持 Mustache 变量替换。
 
 ### overwrite
 
-| Value | Behavior |
+| 值 | 行为 |
 |---|---|
-| `true` (default) | Always overwrite target file |
-| `false` | Skip if target already exists |
+| `true`（默认） | 始终覆盖目标文件 |
+| `false` | 目标文件已存在时跳过 |
 
 ---
 
-## Directory structure
+## 目录结构
 
 ```
 nopatch/
-  nopatch_record/          # patch files
+  nopatch_record/          # 补丁文件
     braces+3.0.3/
       lib/
         parse.js.patch
@@ -147,23 +147,23 @@ nopatch/
       pkg+1.0.0/
         index.js.patch
 
-  nopatch_ignore/          # ignore configs
+  nopatch_ignore/          # 忽略配置
     braces+3.0.3.gitignore
     @scope/
       pkg+1.0.0.gitignore
 
-  tpl_record/              # template source files
+  tpl_record/              # 模板源文件
     braces+3.0.3/
       wxapi/
         WXEntryActivity.java.mustache
 
-  tpl_config/              # template data
+  tpl_config/              # 模板数据
     braces+3.0.3/
       data.toml
 ```
 
 ---
 
-## License
+## 许可
 
 ISC
