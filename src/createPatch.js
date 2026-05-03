@@ -103,7 +103,7 @@ function ensureIgnoreConfig(ignoreConfigDir, name, version) {
 export default async function createPatch(packageName) {
   const pkgJsonPath = path.join(process.cwd(), "node_modules", packageName, "package.json");
   if (!fs.existsSync(pkgJsonPath)) {
-    error(`❌ Package not found: node_modules/${packageName}`);
+    error(`Error: Package not found: node_modules/${packageName}`);
     process.exit(1);
   }
 
@@ -128,14 +128,14 @@ export default async function createPatch(packageName) {
       { stdio: "pipe" }
     );
   } catch (e) {
-    error("❌ Failed to get original package via npm pack");
+    error("Error: Failed to get original package via npm pack");
     error(e.stderr?.toString() || e.message);
     process.exit(1);
   }
 
   const tgzFile = fs.readdirSync(tmpDir).find((f) => f.endsWith(".tgz"));
   if (!tgzFile) {
-    error("❌ npm pack did not produce a .tgz file");
+    error("Error: npm pack did not produce a .tgz file");
     process.exit(1);
   }
 
@@ -169,7 +169,7 @@ export default async function createPatch(packageName) {
     if (origExists && !modExists) {
       fs.mkdirSync(outDir, { recursive: true });
       fs.writeFileSync(path.join(outDir, `${baseName}.nopatch_delete`), now);
-      console.log(`  [-] ${relFile}`);
+      console.log(`  [DEL] ${relFile}`);
       patchCount++;
       continue;
     }
@@ -184,7 +184,7 @@ export default async function createPatch(packageName) {
         if (isBig) {
           // 二进制/大文件：.nopatch_latest.<原后缀> / binary or large file, copy as-is
           fs.copyFileSync(modFile, path.join(outDir, `${baseName}.nopatch_latest${origExt}`));
-          console.log(`  [>] ${relFile} (binary/large, new)`);
+          console.log(`  [ADD] ${relFile} (binary/large, new)`);
           patchCount++;
         } else {
           const emptyTmp = path.join(os.tmpdir(), `nopatch-empty-${Date.now()}`);
@@ -193,7 +193,7 @@ export default async function createPatch(packageName) {
           fs.unlinkSync(emptyTmp);
           if (diff.trim()) {
             fs.writeFileSync(path.join(outDir, `${baseName}.patch`), diff);
-            console.log(`  [+] ${relFile} (new file)`);
+            console.log(`  [ADD] ${relFile} (new file)`);
             patchCount++;
           }
         }
@@ -208,13 +208,13 @@ export default async function createPatch(packageName) {
 
       if (isBig || isBinary(origBuf) || origBuf.length > MAX_DIFF_SIZE) {
         fs.copyFileSync(modFile, path.join(outDir, `${baseName}.nopatch_latest${origExt}`));
-        console.log(`  [>] ${relFile} (binary/large, modified)`);
+        console.log(`  [ADD] ${relFile} (binary/large, modified)`);
         patchCount++;
       } else {
         const diff = await diffFile(origFile, modFile);
         if (diff.trim()) {
           fs.writeFileSync(path.join(outDir, `${baseName}.patch`), diff);
-          console.log(`  [~] ${relFile}`);
+          console.log(`  [MOD] ${relFile}`);
           patchCount++;
         }
       }

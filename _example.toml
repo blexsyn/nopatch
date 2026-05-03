@@ -1,0 +1,38 @@
+# Max Mode Plan Configuration
+# ============================
+# Rename this file to <your-plan-name>.toml to create a plan.
+#
+# Usage:
+#   1. Create <plan-name>.toml in max_mode_config/
+#   2. Run: nopatch --max-start <plan-name>
+#      (records current timestamp, cannot be re-executed)
+#   3. Edit watch_dirs and delete_paths below
+#   4. Modify files in the watched paths
+#   5. Run: nopatch --max-collect <plan-name>
+#      (collects changes once, then disables the plan)
+#      (set enabled = true in TOML to collect again)
+#      (steps 3-5 can be repeated)
+#   6. Manually apply: nopatch --max-apply [plan...]
+#      (omit plan names to apply all, specify names for partial)
+
+# ISO 8601 timestamp — set by --max-start, do not edit manually
+timestamp = ""
+
+# Whether this plan is active — set by --max-start / --max-collect
+enabled = false
+
+# Files or directories to watch for changes
+# Paths are relative to the project root (where package.json is located)
+# Supports both individual files and directories
+# Nested paths (e.g. "src/" and "src/sub/") are not allowed
+# Example: ["node_modules/some-package", "src/vendor/special.js"]
+watch_dirs = [
+  # "node_modules/example-package",
+]
+
+# Files or directories to delete when applying
+# Paths are relative to the project root (where package.json is located)
+# Example: ["node_modules/some-package/dist/unwanted.js"]
+delete_paths = [
+  # "node_modules/example-package/deprecated.js",
+]

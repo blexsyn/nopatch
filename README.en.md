@@ -1,18 +1,18 @@
 # nopatch
 
-[中文文档](README.md)
+[中文](README.md)
 
-A lightweight CLI tool for patching and templating npm packages.
+Lightweight CLI tool for patching and templating npm packages.
 
 ---
 
-## Installation
+## Install
 
 ```bash
 npm install nopatch --save-dev
 ```
 
-That's it. The `postinstall` hook is automatically added to your `package.json` on install.
+That's it. A `postinstall` hook is automatically injected into your `package.json`.
 
 **Requirements**
 - Node.js >= 16
@@ -25,19 +25,22 @@ That's it. The `postinstall` hook is automatically added to your `package.json` 
 | Command | Description |
 |---|---|
 | `nopatch <pkg>` | Create patch for a package |
-| `nopatch` | Apply all patches + templates (postinstall) |
-| `nopatch --patch <pkg>` | Apply patch for specific package |
+| `nopatch` | Apply all patches and templates (postinstall) |
+| `nopatch --patch <pkg>` | Apply patch for a specific package |
 | `nopatch --tpl <pkg>` | Initialize template dirs for a package |
+| `nopatch --max-start <plan>` | Start Max mode recording |
+| `nopatch --max-collect <plan>` | Collect changes once (re-call after re-enabling in TOML) |
+| `nopatch --max-apply` | Apply all Max mode collected data |
 | `nopatch --debug` | Show detailed debug output |
 | `nopatch --help` | Show help |
 
 ---
 
-## Patching
+## Patch
 
-### Create a patch
+### Create Patch
 
-1. Modify files inside `node_modules/<pkg>/` as needed.
+1. Modify files directly in `node_modules/<pkg>/`.
 
 2. Run:
    ```bash
@@ -51,17 +54,17 @@ That's it. The `postinstall` hook is automatically added to your `package.json` 
    nopatch/nopatch_record/@scope/package+1.0.0/
    ```
 
-### Patch file types
+### Patch File Types
 
 | Suffix | Meaning |
 |---|---|
 | `.patch` | Text diff (git unified diff format) |
 | `.nopatch_latest.<ext>` | Binary or large file replacement |
-| `.nopatch_delete` | Marks a deleted file (contains timestamp) |
+| `.nopatch_delete` | Mark file for deletion (content is timestamp) |
 
-### Ignore config
+### Ignore Config
 
-On first run, an ignore file is auto-created:
+Auto-created on first run:
 
 ```
 nopatch/nopatch_ignore/braces+3.0.3.gitignore
@@ -72,9 +75,9 @@ Uses `.gitignore` syntax. Default ignored dirs: `node_modules/`, `build/`, `dist
 
 ---
 
-## Templates
+## Template
 
-Templates are applied **after** patches on every `npm install`.
+Templates run after patches on every `npm install`.
 
 ### Initialize
 
@@ -86,16 +89,16 @@ nopatch --tpl @scope/package
 This creates:
 
 ```
-nopatch/tpl_record/braces+3.0.3/        # place template files here
+nopatch/tpl_record/braces+3.0.3/        # Place template files here
 nopatch/tpl_config/braces+3.0.3/
-  data.toml                              # variables + dynamic path config
+  data.toml                              # Variables and dynamic paths
 ```
 
-### Template files
+### Template Files
 
-- Files with `.mustache` suffix: content is rendered with [Mustache](https://mustache.github.io/), output filename has `.mustache` removed.
-- Other files: copied as-is, only output path supports variable substitution.
-- Files **not** listed in `[[dyna_file_path]]` are output to the same relative path inside `node_modules/<pkg>/`.
+- `.mustache` suffix: Content rendered with Mustache, output filename drops `.mustache`.
+- Other files: Copied as-is, output path supports variable substitution.
+- Files not in `[[dyna_file_path]]` default to `node_modules/<pkg>/` relative path.
 
 ### data.toml
 
@@ -107,14 +110,14 @@ pkgname_path = "com/example/myapp"
 [[dyna_file_path]]
 src       = "wxapi/WXEntryActivity.java.mustache"
 dest      = "android/app/src/main/java/{{pkgname_path}}/wxapi/WXEntryActivity.java"
-overwrite = false   # skip if target already exists (default: true)
+overwrite = false   # Skip if target exists (default: true)
 
 [[dyna_file_path]]
 src      = "assets/icon.png"
 destRoot = "../../android/app/src/main/res/drawable/icon.png"
 ```
 
-### Path fields
+### Path Fields
 
 | Field | Base |
 |---|---|
@@ -128,16 +131,58 @@ All path fields support Mustache variable substitution.
 
 | Value | Behavior |
 |---|---|
-| `true` (default) | Always overwrite target file |
+| `true` (default) | Always overwrite target |
 | `false` | Skip if target already exists |
 
 ---
 
-## Directory structure
+## Max Mode
+
+Timestamp-based file change collection, for scenarios requiring extensive file modifications.
+
+### 1. Create Plan Config Manually
+
+Create `<plan-name>.toml` under `nopatch/max_mode_config/`, see `_example.toml` for reference.
+
+### 2. Start Recording (once only)
+
+```bash
+nopatch --max-start <plan-name>
+```
+
+Records the current timestamp. Cannot be re-executed.
+
+### 3. Edit Configuration (repeatable)
+
+Edit `watch_dirs` (supports files and directories, nested paths not allowed) and `delete_paths`.
+
+### 4. After Modifying Files, Collect Changes (repeatable)
+
+```bash
+nopatch --max-collect <plan-name>
+```
+
+Auto-disables after collection. Set `enabled = true` in TOML to collect again. Steps 3-5 can be repeated.
+
+### 5. Apply Data
+
+Manual only (will not auto-apply on `npm install`):
+
+```bash
+# Apply all plans
+nopatch --max-apply
+
+# Apply specific plans
+nopatch --max-apply plan-a plan-b
+```
+
+---
+
+## Directory Structure
 
 ```
 nopatch/
-  nopatch_record/          # patch files
+  nopatch_record/          # Patch files
     braces+3.0.3/
       lib/
         parse.js.patch
@@ -147,19 +192,30 @@ nopatch/
       pkg+1.0.0/
         index.js.patch
 
-  nopatch_ignore/          # ignore configs
+  nopatch_ignore/          # Ignore configs
     braces+3.0.3.gitignore
     @scope/
       pkg+1.0.0.gitignore
 
-  tpl_record/              # template source files
+  tpl_record/              # Template source files
     braces+3.0.3/
       wxapi/
         WXEntryActivity.java.mustache
 
-  tpl_config/              # template data
+  tpl_config/              # Template data
     braces+3.0.3/
       data.toml
+
+  max_mode_config/         # Max mode plan configs
+    _example.toml
+    myplan.toml
+
+  max_mode_data/           # Max mode collected data
+    myplan/
+      node_modules/
+        some-pkg/
+          index.js.nopatch_latest
+          old.js.nopatch_delete
 ```
 
 ---

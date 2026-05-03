@@ -84,7 +84,7 @@ export default async function applyPatch(targetPkg) {
   if (targetPkg) {
     pkgList = pkgList.filter((p) => p.pkgName === targetPkg);
     if (pkgList.length === 0) {
-      error(`❌ No patches found for: ${targetPkg}`);
+      error(`Error: No patches found for: ${targetPkg}`);
       process.exit(1);
     }
   }
@@ -95,7 +95,7 @@ export default async function applyPatch(targetPkg) {
     const pkgDir = path.join(process.cwd(), "node_modules", pkgName);
 
     if (!fs.existsSync(pkgDir)) {
-      console.log(`  [skip] ${pkgName}@${version} not installed`);
+      console.log(`  [SKIP] ${pkgName}@${version} not installed`);
       continue;
     }
 
@@ -113,7 +113,7 @@ export default async function applyPatch(targetPkg) {
       if (patch.type === "delete") {
         if (fs.existsSync(targetFile)) {
           fs.rmSync(targetFile);
-          console.log(`  [-] ${pkgName}/${relTarget}`);
+          console.log(`  [DEL] ${pkgName}/${relTarget}`);
         }
         applyCount++;
         continue;
@@ -122,7 +122,7 @@ export default async function applyPatch(targetPkg) {
       if (patch.type === "latest") {
         fs.mkdirSync(path.dirname(targetFile), { recursive: true });
         fs.copyFileSync(patch.full, targetFile);
-        console.log(`  [>] ${pkgName}/${relTarget}`);
+        console.log(`  [ADD] ${pkgName}/${relTarget}`);
         applyCount++;
         continue;
       }
@@ -143,7 +143,7 @@ export default async function applyPatch(targetPkg) {
         .catch(() => true);
 
       if (alreadyApplied) {
-        console.log(`  [=] ${pkgName}/${relTarget} (already applied)`);
+        console.log(`  [SKIP] ${pkgName}/${relTarget} (already applied)`);
         continue;
       }
 
@@ -154,11 +154,11 @@ export default async function applyPatch(targetPkg) {
           "--directory": directory,
         })
         .catch((e) => {
-          error(`  [!] Failed to apply patch: ${pkgName}/${relTarget}`);
+          error(`  [WARN] Failed to apply patch: ${pkgName}/${relTarget}`);
           error(e.message);
         });
 
-      console.log(`  [+] ${pkgName}/${relTarget}`);
+      console.log(`  [ADD] ${pkgName}/${relTarget}`);
       applyCount++;
     }
   }

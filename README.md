@@ -28,6 +28,9 @@ npm install nopatch --save-dev
 | `nopatch` | 应用所有补丁和模板（postinstall） |
 | `nopatch --patch <pkg>` | 应用指定包的补丁 |
 | `nopatch --tpl <pkg>` | 初始化包的模板目录 |
+| `nopatch --max-start <plan>` | 启动 Max 模式录制 |
+| `nopatch --max-collect <plan>` | 采集一次变更（可多次调用，需手动重设 enabled） |
+| `nopatch --max-apply` | 应用所有 Max 采集数据 |
 | `nopatch --debug` | 显示详细调试日志 |
 | `nopatch --help` | 显示帮助 |
 
@@ -133,6 +136,48 @@ destRoot = "../../android/app/src/main/res/drawable/icon.png"
 
 ---
 
+## Max 模式
+
+基于时间戳的文件变更采集模式，适用于需要大量修改文件的场景。
+
+### 1. 手动创建计划配置
+
+在 `nopatch/max_mode_config/` 下创建 `<plan-name>.toml`，参考 `_example.toml`。
+
+### 2. 启动录制（仅一次）
+
+```bash
+nopatch --max-start <plan-name>
+```
+
+记录当前时间戳，不可重复执行。
+
+### 3. 编辑配置（可重复）
+
+编辑 `watch_dirs`（支持文件和目录，不允许嵌套路径）和 `delete_paths`。
+
+### 4. 修改文件后，采集变更（可重复）
+
+```bash
+nopatch --max-collect <plan-name>
+```
+
+采集完成后自动禁用，需手动将 TOML 中 `enabled` 改回 `true` 才能再次采集。步骤 3-5 可重复。
+
+### 5. 应用数据
+
+手动执行（不会在 `npm install` 时自动释放）：
+
+```bash
+# 释放全部计划
+nopatch --max-apply
+
+# 释放指定计划
+nopatch --max-apply plan-a plan-b
+```
+
+---
+
 ## 目录结构
 
 ```
@@ -160,6 +205,17 @@ nopatch/
   tpl_config/              # 模板数据
     braces+3.0.3/
       data.toml
+
+  max_mode_config/         # Max 模式计划配置
+    _example.toml
+    myplan.toml
+
+  max_mode_data/           # Max 模式采集数据
+    myplan/
+      node_modules/
+        some-pkg/
+          index.js.nopatch_latest
+          old.js.nopatch_delete
 ```
 
 ---

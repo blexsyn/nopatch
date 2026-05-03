@@ -7,7 +7,11 @@
     "nopatch": "src/app.js"
   },
   "files": [
-    "src/"
+    "src/",
+    "README.md",
+    "README.en.md",
+    "_example.toml",
+    "_template.toml"
   ],
   "scripts": {
     "postinstall": "node src/init.js"

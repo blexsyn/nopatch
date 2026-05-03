@@ -79,7 +79,7 @@ function loadDataToml(configDir) {
       dynaPaths: parsed.dyna_file_path || [],
     };
   } catch (e) {
-    error(`❌ Failed to parse ${dataPath}: ${e.message}`);
+    error(`Error: Failed to parse ${dataPath}: ${e.message}`);
     process.exit(1);
   }
 }
@@ -135,7 +135,7 @@ export default async function applyTemplate(targetPkg) {
   if (targetPkg) {
     pkgDirs = pkgDirs.filter((p) => p.pkgName === targetPkg);
     if (pkgDirs.length === 0) {
-      error(`❌ No templates found for: ${targetPkg}`);
+      error(`Error: No templates found for: ${targetPkg}`);
       process.exit(1);
     }
   }
@@ -146,7 +146,7 @@ export default async function applyTemplate(targetPkg) {
     const pkgDir = path.join(cwd, "node_modules", pkgName);
 
     if (!fs.existsSync(pkgDir)) {
-      console.log(`  [skip] ${pkgName}@${version} not installed`);
+      console.log(`  [SKIP] ${pkgName}@${version} not installed`);
       continue;
     }
 
@@ -156,12 +156,12 @@ export default async function applyTemplate(targetPkg) {
     const dynaMap = new Map();
     for (const entry of dynaPaths) {
       if (!entry.src) {
-        error(`❌ [[dyna_file_path]] missing 'src' field in ${pkgName}`);
+        error(`Error: [[dyna_file_path]] missing 'src' field in ${pkgName}`);
         continue;
       }
       const destPaths = resolveDestPath(entry.dest, entry.destRoot, entry.destAbs, vars, cwd, pkgDir);
       if (destPaths.length === 0) {
-        error(`❌ [[dyna_file_path]] for '${entry.src}' has no dest or destAbs`);
+        error(`Error: [[dyna_file_path]] for '${entry.src}' has no dest or destAbs`);
         continue;
       }
       if (!dynaMap.has(entry.src)) dynaMap.set(entry.src, []);
@@ -193,7 +193,7 @@ export default async function applyTemplate(targetPkg) {
         // overwrite=false 且目标已存在则跳过
         // skip if overwrite is false and target already exists
         if (!overwrite && fs.existsSync(destPath)) {
-          console.log(`  [=] ${relFile} (skip, target exists)`);
+          console.log(`  [SKIP] ${relFile} (skip, target exists)`);
           continue;
         }
 
@@ -201,14 +201,14 @@ export default async function applyTemplate(targetPkg) {
 
         if (binary || !isMustache) {
           fs.copyFileSync(srcFile, destPath);
-          console.log(`  [>] ${relFile}`);
+          console.log(`  [ADD] ${relFile}`);
           console.log(`      -> ${destPath}`);
         } else {
           const content = buf.toString("utf8");
           Mustache.escape = (v) => v;
           const rendered = Mustache.render(content, vars);
           fs.writeFileSync(destPath, rendered, "utf8");
-          console.log(`  [~] ${relFile}`);
+          console.log(`  [MOD] ${relFile}`);
           console.log(`      -> ${destPath}`);
         }
         applyCount++;
