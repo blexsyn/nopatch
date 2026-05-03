@@ -25,12 +25,12 @@ npm install nopatch --save-dev
 | 命令 | 说明 |
 |---|---|
 | `nopatch <pkg>` | 为包创建补丁 |
-| `nopatch` | 应用所有补丁和模板（postinstall） |
+| `nopatch` | 应用所有补丁（postinstall） |
 | `nopatch --patch <pkg>` | 应用指定包的补丁 |
-| `nopatch --tpl <pkg>` | 初始化包的模板目录 |
 | `nopatch --max-start <plan>` | 启动 Max 模式录制 |
 | `nopatch --max-collect <plan>` | 采集一次变更（可多次调用，需手动重设 enabled） |
-| `nopatch --max-apply` | 应用所有 Max 采集数据 |
+| `nopatch --max-apply [plan...]` | 应用 Max 采集数据（手动，省略计划名则全部） |
+| `nopatch --tpl-apply [plan...]` | 应用模板（手动，省略计划名则全部） |
 | `nopatch --debug` | 显示详细调试日志 |
 | `nopatch --help` | 显示帮助 |
 
@@ -77,52 +77,47 @@ nopatch/nopatch_ignore/@scope/package+1.0.0.gitignore
 
 ## 模板
 
-模板在每次 `npm install` 时在补丁之后执行。
+模板需要手动执行，不会在 `npm install` 时自动释放。
 
-### 初始化
+### 1. 手动创建计划配置
 
-```bash
-nopatch --tpl braces
-nopatch --tpl @scope/package
-```
+在 `nopatch/tpl_config/` 下创建 `<plan-name>.toml`，参考 `_example.toml`。
 
-这会创建：
+### 2. 放置模板文件
 
-```
-nopatch/tpl_record/braces+3.0.3/        # 在此放置模板文件
-nopatch/tpl_config/braces+3.0.3/
-  data.toml                              # 变量和动态路径配置
-```
+在 `nopatch/tpl_record/<plan-name>/` 下放置模板文件，参考 `_example/`。
 
 ### 模板文件
 
 - `.mustache` 后缀的文件：内容使用 Mustache 渲染，输出文件名去掉 `.mustache` 后缀。
 - 其他文件：原样复制，仅输出路径支持变量替换。
-- 未在 `[[dyna_file_path]]` 中配置的文件，默认输出到 `node_modules/<pkg>/` 的对应相对路径。
+- 未在 `[[dyna_file_path]]` 中配置的文件，默认输出到 `output_base` 的对应相对路径。
 
-### data.toml
+### myplan.toml
 
 ```toml
 [vars]
 pkgname      = "com.example.myapp"
 pkgname_path = "com/example/myapp"
 
+output_base = "android/app/src/main/java"
+
 [[dyna_file_path]]
 src       = "wxapi/WXEntryActivity.java.mustache"
-dest      = "android/app/src/main/java/{{pkgname_path}}/wxapi/WXEntryActivity.java"
+dest      = "{{pkgname_path}}/wxapi/WXEntryActivity.java"
 overwrite = false   # 目标存在时跳过（默认：true）
 
 [[dyna_file_path]]
 src      = "assets/icon.png"
-destRoot = "../../android/app/src/main/res/drawable/icon.png"
+destRoot = "../res/drawable/icon.png"
 ```
 
 ### 路径字段
 
 | 字段 | 基准 |
 |---|---|
-| `dest` | `process.cwd()`（项目根目录） |
-| `destRoot` | `node_modules/<pkg>/` |
+| `dest` | `output_base` |
+| `destRoot` | `output_base` |
 | `destAbs` | 操作系统根目录（绝对路径） |
 
 所有路径字段均支持 Mustache 变量替换。
@@ -133,6 +128,18 @@ destRoot = "../../android/app/src/main/res/drawable/icon.png"
 |---|---|
 | `true`（默认） | 始终覆盖目标文件 |
 | `false` | 目标文件已存在时跳过 |
+
+### 应用模板
+
+手动执行（不会在 `npm install` 时自动释放）：
+
+```bash
+# 释放全部计划
+nopatch --tpl-apply
+
+# 释放指定计划
+nopatch --tpl-apply myplan
+```
 
 ---
 
@@ -198,13 +205,17 @@ nopatch/
       pkg+1.0.0.gitignore
 
   tpl_record/              # 模板源文件
-    braces+3.0.3/
+    _example/
+      hello.txt.mustache
+    myplan/
       wxapi/
         WXEntryActivity.java.mustache
+      assets/
+        icon.png
 
-  tpl_config/              # 模板数据
-    braces+3.0.3/
-      data.toml
+  tpl_config/              # 模板配置
+    _example.toml
+    myplan.toml
 
   max_mode_config/         # Max 模式计划配置
     _example.toml

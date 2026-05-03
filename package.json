@@ -11,7 +11,8 @@
     "README.md",
     "README.en.md",
     "_example.toml",
-    "_template.toml"
+    "_template.toml",
+    "_tpl_example/"
   ],
   "scripts": {
     "postinstall": "node src/init.js"

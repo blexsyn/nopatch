@@ -2,7 +2,6 @@
 import createPatch from "./createPatch.js";
 import applyPatch from "./applyPatch.js";
 import applyTemplate from "./applyTemplate.js";
-import initTemplate from "./initTemplate.js";
 import { checkAndFix } from "./init.js";
 import {
   maxStart,
@@ -20,8 +19,7 @@ if (args.includes("--help") || args.includes("-h")) {
   console.log(`
 Usage:
   nopatch <package-name>        Create patch for a package
-  nopatch --tpl <package-name>  Initialize template dirs for a package
-  nopatch                       Apply all patches + templates (postinstall)
+  nopatch                       Apply all patches (postinstall)
   nopatch --patch <name>        Apply patch for a specific package only
 
 Max mode:
@@ -29,17 +27,20 @@ Max mode:
   nopatch --max-collect <plan>    Collect changes once (re-enable in TOML to collect again)
   nopatch --max-apply [plan...]     Apply collected data (manual only, all plans if omitted)
 
+Template:
+  nopatch --tpl-apply [plan...]    Apply templates (manual only, all plans if omitted)
+
 Examples:
   nopatch braces
   nopatch @scope/package
-  nopatch --tpl braces
   nopatch --patch braces
   nopatch --max-start myplan
   nopatch --max-collect myplan
   nopatch --max-apply
+  nopatch --tpl-apply
+  nopatch --tpl-apply myplan
 
 Options:
-  --tpl <name>     Initialize template directory and data.toml for a package
   --patch <name>   Apply patch for specific package only
   --debug          Show detailed debug output
   -h, --help       Show this help message
@@ -50,9 +51,10 @@ Options:
 const maxStartIndex = args.findIndex((a) => a === "--max-start");
 const maxCollectIndex = args.findIndex((a) => a === "--max-collect");
 const maxApplyIndex = args.findIndex((a) => a === "--max-apply");
+const tplApplyIndex = args.findIndex((a) => a === "--tpl-apply");
 
 const maxFlagIndices = [
-  maxStartIndex, maxCollectIndex, maxApplyIndex,
+  maxStartIndex, maxCollectIndex, maxApplyIndex, tplApplyIndex,
 ].filter((i) => i !== -1);
 
 if (maxFlagIndices.length > 0) {
@@ -90,25 +92,31 @@ if (maxFlagIndices.length > 0) {
     maxApply(planNames.length > 0 ? planNames : undefined);
     process.exit(0);
   }
-}
 
-const tplFlagIndex = args.findIndex((a) => a === "--tpl");
-const tplFlag = args.find((a) => a.startsWith("--tpl="))?.split("=")[1]
-  ?? (tplFlagIndex !== -1 ? args[tplFlagIndex + 1] : null);
+  if (tplApplyIndex !== -1) {
+    const planNames = [];
+    for (let i = tplApplyIndex + 1; i < args.length; i++) {
+      if (args[i].startsWith("--")) break;
+      planNames.push(args[i]);
+    }
+    await applyTemplate(planNames.length > 0 ? planNames[0] : undefined);
+    process.exit(0);
+  }
+}
 
 const patchFlagIndex = args.findIndex((a) => a === "--patch");
 const patchFlag = args.find((a) => a.startsWith("--patch="))?.split("=")[1]
   ?? (patchFlagIndex !== -1 ? args[patchFlagIndex + 1] : null);
 
 const knownFlags = [
-  "--tpl", "--patch", "--help", "-h", "--debug",
+  "--patch", "--help", "-h", "--debug",
   "--max-start", "--max-collect", "--max-apply",
+  "--tpl-apply",
 ];
 const unknownFlags = args.filter(
   (a) =>
     a.startsWith("-") &&
     !knownFlags.includes(a) &&
-    !a.startsWith("--tpl=") &&
     !a.startsWith("--patch=")
 );
 if (unknownFlags.length > 0) {
@@ -118,19 +126,15 @@ if (unknownFlags.length > 0) {
 }
 
 const flagValueIndices = new Set();
-if (tplFlagIndex !== -1) flagValueIndices.add(tplFlagIndex + 1);
 if (patchFlagIndex !== -1) flagValueIndices.add(patchFlagIndex + 1);
 
 const positional = args.filter((a, i) => !a.startsWith("-") && !flagValueIndices.has(i));
 
-if (tplFlag) {
-  initTemplate(tplFlag);
-} else if (positional.length > 0) {
+if (positional.length > 0) {
   for (const pkg of positional) {
     createPatch(pkg);
   }
 } else {
   checkAndFix(process.cwd());
   await applyPatch(patchFlag ?? undefined);
-  await applyTemplate(patchFlag ?? undefined);
 }

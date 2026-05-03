@@ -22,6 +22,11 @@ const COPY_FILES = [
   { src: "README.md", dst: "README.md" },
   { src: "README.en.md", dst: "README.en.md" },
   { src: "_example.toml", dst: "max_mode_config/_example.toml" },
+  { src: "_template.toml", dst: "tpl_config/_example.toml" },
+];
+
+const COPY_DIRS = [
+  { src: "_tpl_example", dst: "tpl_record/_example" },
 ];
 
 // 检查并修正 nopatch 的依赖分类，注入 postinstall
@@ -101,6 +106,27 @@ function copyAssets(projectRoot) {
     const srcPath = path.join(PKG_ROOT, src);
     const dstPath = path.join(nopatchRoot, dst);
     if (fs.existsSync(srcPath) && !fs.existsSync(dstPath)) {
+      fs.mkdirSync(path.dirname(dstPath), { recursive: true });
+      fs.copyFileSync(srcPath, dstPath);
+    }
+  }
+
+  for (const { src, dst } of COPY_DIRS) {
+    const srcDir = path.join(PKG_ROOT, src);
+    const dstDir = path.join(nopatchRoot, dst);
+    if (fs.existsSync(srcDir)) {
+      copyDirIfNew(srcDir, dstDir);
+    }
+  }
+}
+
+function copyDirIfNew(srcDir, dstDir) {
+  for (const entry of fs.readdirSync(srcDir, { withFileTypes: true })) {
+    const srcPath = path.join(srcDir, entry.name);
+    const dstPath = path.join(dstDir, entry.name);
+    if (entry.isDirectory()) {
+      copyDirIfNew(srcPath, dstPath);
+    } else if (!fs.existsSync(dstPath)) {
       fs.mkdirSync(path.dirname(dstPath), { recursive: true });
       fs.copyFileSync(srcPath, dstPath);
     }

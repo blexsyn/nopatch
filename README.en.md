@@ -25,12 +25,12 @@ That's it. A `postinstall` hook is automatically injected into your `package.jso
 | Command | Description |
 |---|---|
 | `nopatch <pkg>` | Create patch for a package |
-| `nopatch` | Apply all patches and templates (postinstall) |
+| `nopatch` | Apply all patches (postinstall) |
 | `nopatch --patch <pkg>` | Apply patch for a specific package |
-| `nopatch --tpl <pkg>` | Initialize template dirs for a package |
 | `nopatch --max-start <plan>` | Start Max mode recording |
 | `nopatch --max-collect <plan>` | Collect changes once (re-call after re-enabling in TOML) |
-| `nopatch --max-apply` | Apply all Max mode collected data |
+| `nopatch --max-apply [plan...]` | Apply Max collected data (manual, all plans if omitted) |
+| `nopatch --tpl-apply [plan...]` | Apply templates (manual, all plans if omitted) |
 | `nopatch --debug` | Show detailed debug output |
 | `nopatch --help` | Show help |
 
@@ -77,52 +77,47 @@ Uses `.gitignore` syntax. Default ignored dirs: `node_modules/`, `build/`, `dist
 
 ## Template
 
-Templates run after patches on every `npm install`.
+Templates must be applied manually. They will not auto-apply on `npm install`.
 
-### Initialize
+### 1. Create Plan Config Manually
 
-```bash
-nopatch --tpl braces
-nopatch --tpl @scope/package
-```
+Create `<plan-name>.toml` under `nopatch/tpl_config/`, see `_example.toml` for reference.
 
-This creates:
+### 2. Place Template Files
 
-```
-nopatch/tpl_record/braces+3.0.3/        # Place template files here
-nopatch/tpl_config/braces+3.0.3/
-  data.toml                              # Variables and dynamic paths
-```
+Place template files under `nopatch/tpl_record/<plan-name>/`, see `_example/` for reference.
 
 ### Template Files
 
 - `.mustache` suffix: Content rendered with Mustache, output filename drops `.mustache`.
 - Other files: Copied as-is, output path supports variable substitution.
-- Files not in `[[dyna_file_path]]` default to `node_modules/<pkg>/` relative path.
+- Files not in `[[dyna_file_path]]` default to `output_base` relative path.
 
-### data.toml
+### myplan.toml
 
 ```toml
 [vars]
 pkgname      = "com.example.myapp"
 pkgname_path = "com/example/myapp"
 
+output_base = "android/app/src/main/java"
+
 [[dyna_file_path]]
 src       = "wxapi/WXEntryActivity.java.mustache"
-dest      = "android/app/src/main/java/{{pkgname_path}}/wxapi/WXEntryActivity.java"
+dest      = "{{pkgname_path}}/wxapi/WXEntryActivity.java"
 overwrite = false   # Skip if target exists (default: true)
 
 [[dyna_file_path]]
 src      = "assets/icon.png"
-destRoot = "../../android/app/src/main/res/drawable/icon.png"
+destRoot = "../res/drawable/icon.png"
 ```
 
 ### Path Fields
 
 | Field | Base |
 |---|---|
-| `dest` | `process.cwd()` (project root) |
-| `destRoot` | `node_modules/<pkg>/` |
+| `dest` | `output_base` |
+| `destRoot` | `output_base` |
 | `destAbs` | OS root (absolute path) |
 
 All path fields support Mustache variable substitution.
@@ -133,6 +128,18 @@ All path fields support Mustache variable substitution.
 |---|---|
 | `true` (default) | Always overwrite target |
 | `false` | Skip if target already exists |
+
+### Apply Templates
+
+Manual only (will not auto-apply on `npm install`):
+
+```bash
+# Apply all plans
+nopatch --tpl-apply
+
+# Apply specific plan
+nopatch --tpl-apply myplan
+```
 
 ---
 
@@ -198,13 +205,17 @@ nopatch/
       pkg+1.0.0.gitignore
 
   tpl_record/              # Template source files
-    braces+3.0.3/
+    _example/
+      hello.txt.mustache
+    myplan/
       wxapi/
         WXEntryActivity.java.mustache
+      assets/
+        icon.png
 
-  tpl_config/              # Template data
-    braces+3.0.3/
-      data.toml
+  tpl_config/              # Template configs
+    _example.toml
+    myplan.toml
 
   max_mode_config/         # Max mode plan configs
     _example.toml

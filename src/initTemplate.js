@@ -11,14 +11,6 @@ const NOPATCH_DIR = "nopatch";
 const TPL_RECORD_DIR = "tpl_record";
 const TPL_CONFIG_DIR = "tpl_config";
 
-function pkgDirName(name, version) {
-  if (name.startsWith("@")) {
-    const [scope, pkg] = name.split("/");
-    return { dirs: [scope, `${pkg}+${version}`] };
-  }
-  return { dirs: [`${name}+${version}`] };
-}
-
 function readTemplateToml() {
   const srcPath = path.join(PKG_ROOT, "_template.toml");
   if (fs.existsSync(srcPath)) {
@@ -27,34 +19,59 @@ function readTemplateToml() {
   return "";
 }
 
-export default async function initTemplate(packageName) {
-  const pkgJsonPath = path.join(process.cwd(), "node_modules", packageName, "package.json");
-  if (!fs.existsSync(pkgJsonPath)) {
-    error(`Error: Package not found: node_modules/${packageName}`);
+function copyExampleFiles(dstDir) {
+  const exampleDir = path.join(PKG_ROOT, "_tpl_example");
+  if (!fs.existsSync(exampleDir)) return;
+
+  for (const entry of fs.readdirSync(exampleDir, { withFileTypes: true })) {
+    const srcPath = path.join(exampleDir, entry.name);
+    const dstPath = path.join(dstDir, entry.name);
+    if (entry.isFile() && !fs.existsSync(dstPath)) {
+      fs.copyFileSync(srcPath, dstPath);
+      console.log(`  [ADD] ${path.relative(process.cwd(), dstPath)}`);
+    } else if (entry.isDirectory()) {
+      copyDir(srcPath, dstPath);
+    }
+  }
+}
+
+function copyDir(srcDir, dstDir) {
+  fs.mkdirSync(dstDir, { recursive: true });
+  for (const entry of fs.readdirSync(srcDir, { withFileTypes: true })) {
+    const srcPath = path.join(srcDir, entry.name);
+    const dstPath = path.join(dstDir, entry.name);
+    if (entry.isFile() && !fs.existsSync(dstPath)) {
+      fs.copyFileSync(srcPath, dstPath);
+      console.log(`  [ADD] ${path.relative(process.cwd(), dstPath)}`);
+    } else if (entry.isDirectory()) {
+      copyDir(srcPath, dstPath);
+    }
+  }
+}
+
+export default async function initTemplate(planName) {
+  if (!planName) {
+    error("Error: --tpl requires a plan name");
     process.exit(1);
   }
 
-  const pkgVersion = JSON.parse(fs.readFileSync(pkgJsonPath, "utf8")).version;
-  const { dirs } = pkgDirName(packageName, pkgVersion);
-
   const nopatchRoot = path.join(process.cwd(), NOPATCH_DIR);
 
-  // tpl_record/<pkg+ver>/
-  const tplRecordDir = path.join(nopatchRoot, TPL_RECORD_DIR, ...dirs);
+  const tplRecordDir = path.join(nopatchRoot, TPL_RECORD_DIR, planName);
   fs.mkdirSync(tplRecordDir, { recursive: true });
 
-  // tpl_config/<pkg+ver>/data.toml
-  const tplConfigDir = path.join(nopatchRoot, TPL_CONFIG_DIR, ...dirs);
+  const tplConfigDir = path.join(nopatchRoot, TPL_CONFIG_DIR);
   fs.mkdirSync(tplConfigDir, { recursive: true });
 
-  const dataTomlPath = path.join(tplConfigDir, "data.toml");
-  if (!fs.existsSync(dataTomlPath)) {
-    fs.writeFileSync(dataTomlPath, readTemplateToml());
-    console.log(`  [ADD] ${path.relative(process.cwd(), dataTomlPath)}`);
+  const configTomlPath = path.join(tplConfigDir, `${planName}.toml`);
+  if (!fs.existsSync(configTomlPath)) {
+    fs.writeFileSync(configTomlPath, readTemplateToml());
+    console.log(`  [ADD] ${path.relative(process.cwd(), configTomlPath)}`);
   } else {
-    console.log(`  [SKIP] ${path.relative(process.cwd(), dataTomlPath)} (already exists)`);
+    console.log(`  [SKIP] ${path.relative(process.cwd(), configTomlPath)} (already exists)`);
   }
 
   console.log(`  [ADD] ${path.relative(process.cwd(), tplRecordDir)}`);
+  copyExampleFiles(tplRecordDir);
   console.log(`tpl: init done, place template files in the above directory`);
 }
