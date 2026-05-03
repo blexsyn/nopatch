@@ -96,7 +96,7 @@ if (maxFlagIndices.length > 0) {
       console.error("Error: --max-restart requires a plan name");
       process.exit(1);
     }
-    maxRestart(planName);
+    await maxRestart(planName);
     process.exit(0);
   }
 

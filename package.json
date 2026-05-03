@@ -1,6 +1,6 @@
 {
   "name": "nopatch",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Lightweight CLI tool for patching and templating npm packages",
   "main": "src/app.js",
   "bin": {

@@ -169,6 +169,7 @@ function validateWatchDirs(watchDirs) {
 
 function collectWatchPath(watchPath, cwd, ts, planDataDir) {
   const absPath = path.join(cwd, watchPath);
+
   if (!fs.existsSync(absPath)) {
     console.log(`  [SKIP] ${watchPath} (not found)`);
     return 0;
@@ -256,7 +257,7 @@ export function maxCollect(planName) {
   console.log(`max: plan "${planName}" collected (${collectCount} files, ${deleteCount} deletes)`);
 }
 
-export function maxRestart(planName) {
+export async function maxRestart(planName) {
   const result = readTomlFile(planName);
   if (!result) {
     error(`Error: Plan not found: ${planName}`);
@@ -280,14 +281,14 @@ export function maxRestart(planName) {
   };
   writeState(planName, newState);
 
-  setTimeout(() => {
-    const planDataDir = dataDir(planName);
-    if (fs.existsSync(planDataDir)) {
-      maxApply([planName]);
-    }
-    console.log(`max: plan "${planName}" restarted`);
-    console.log(`     timestamp: ${newState.timestamp}`);
-  }, RESTART_DELAY_MS);
+  await new Promise(resolve => setTimeout(resolve, RESTART_DELAY_MS));
+
+  const planDataDir = dataDir(planName);
+  if (fs.existsSync(planDataDir)) {
+    maxApply([planName]);
+  }
+  console.log(`max: plan "${planName}" restarted`);
+  console.log(`     timestamp: ${newState.timestamp}`);
 }
 
 export function maxApply(planNames) {
@@ -346,6 +347,8 @@ export function maxApply(planNames) {
             const targetPath = path.join(cwd, targetRel);
             fs.mkdirSync(path.dirname(targetPath), { recursive: true });
             fs.copyFileSync(full, targetPath);
+            const now = new Date();
+            fs.utimesSync(targetPath, now, now);
             console.log(`  [ADD] ${targetRel}`);
             applyCount++;
           }
