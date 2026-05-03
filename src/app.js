@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 import createPatch from "./createPatch.js";
 import applyPatch from "./applyPatch.js";
-import applyTemplate from "./applyTemplate.js";
+import applyTemplate, { tplVerify } from "./applyTemplate.js";
 import { checkAndFix } from "./init.js";
 import {
   maxStart,
   maxCollect,
+  maxRestart,
   maxApply,
 } from "./maxMode.js";
 
@@ -23,12 +24,14 @@ Usage:
   nopatch --patch <name>        Apply patch for a specific package only
 
 Max mode:
-  nopatch --max-start <plan>     Start a recording session (edit TOML to configure)
-  nopatch --max-collect <plan>    Collect changes once (re-enable in TOML to collect again)
-  nopatch --max-apply [plan...]     Apply collected data (manual only, all plans if omitted)
+  nopatch --max-start <plan>      Start a recording session (edit TOML to configure)
+  nopatch --max-collect <plan>     Collect changes (once only, restart to collect again)
+  nopatch --max-restart <plan>     Restart plan: release data, reset timestamp for next collect
+  nopatch --max-apply [plan...]    Apply collected data (manual only, all plans if omitted)
 
 Template:
   nopatch --tpl-apply [plan...]    Apply templates (manual only, all plans if omitted)
+  nopatch --tpl-verify <plan>      Verify template plan (check config, files, variables)
 
 Examples:
   nopatch braces
@@ -36,9 +39,11 @@ Examples:
   nopatch --patch braces
   nopatch --max-start myplan
   nopatch --max-collect myplan
+  nopatch --max-restart myplan
   nopatch --max-apply
   nopatch --tpl-apply
   nopatch --tpl-apply myplan
+  nopatch --tpl-verify myplan
 
 Options:
   --patch <name>   Apply patch for specific package only
@@ -50,11 +55,13 @@ Options:
 
 const maxStartIndex = args.findIndex((a) => a === "--max-start");
 const maxCollectIndex = args.findIndex((a) => a === "--max-collect");
+const maxRestartIndex = args.findIndex((a) => a === "--max-restart");
 const maxApplyIndex = args.findIndex((a) => a === "--max-apply");
 const tplApplyIndex = args.findIndex((a) => a === "--tpl-apply");
+const tplVerifyIndex = args.findIndex((a) => a === "--tpl-verify");
 
 const maxFlagIndices = [
-  maxStartIndex, maxCollectIndex, maxApplyIndex, tplApplyIndex,
+  maxStartIndex, maxCollectIndex, maxRestartIndex, maxApplyIndex, tplApplyIndex, tplVerifyIndex,
 ].filter((i) => i !== -1);
 
 if (maxFlagIndices.length > 0) {
@@ -83,6 +90,16 @@ if (maxFlagIndices.length > 0) {
     process.exit(0);
   }
 
+  if (maxRestartIndex !== -1) {
+    const planName = args[maxRestartIndex + 1];
+    if (!planName) {
+      console.error("Error: --max-restart requires a plan name");
+      process.exit(1);
+    }
+    maxRestart(planName);
+    process.exit(0);
+  }
+
   if (maxApplyIndex !== -1) {
     const planNames = [];
     for (let i = maxApplyIndex + 1; i < args.length; i++) {
@@ -102,6 +119,16 @@ if (maxFlagIndices.length > 0) {
     await applyTemplate(planNames.length > 0 ? planNames[0] : undefined);
     process.exit(0);
   }
+
+  if (tplVerifyIndex !== -1) {
+    const planName = args[tplVerifyIndex + 1];
+    if (!planName) {
+      console.error("Error: --tpl-verify requires a plan name");
+      process.exit(1);
+    }
+    tplVerify(planName);
+    process.exit(0);
+  }
 }
 
 const patchFlagIndex = args.findIndex((a) => a === "--patch");
@@ -110,8 +137,8 @@ const patchFlag = args.find((a) => a.startsWith("--patch="))?.split("=")[1]
 
 const knownFlags = [
   "--patch", "--help", "-h", "--debug",
-  "--max-start", "--max-collect", "--max-apply",
-  "--tpl-apply",
+  "--max-start", "--max-collect", "--max-restart", "--max-apply",
+  "--tpl-apply", "--tpl-verify",
 ];
 const unknownFlags = args.filter(
   (a) =>

@@ -27,16 +27,18 @@ npm install nopatch --save-dev
 | `nopatch <pkg>` | 为包创建补丁 |
 | `nopatch` | 应用所有补丁（postinstall） |
 | `nopatch --patch <pkg>` | 应用指定包的补丁 |
-| `nopatch --max-start <plan>` | 启动 Max 模式录制 |
-| `nopatch --max-collect <plan>` | 采集一次变更（可多次调用，需手动重设 enabled） |
+| `nopatch --max-start <plan>` | 启动 Max 模式录制（记录时间戳，不可重复） |
+| `nopatch --max-collect <plan>` | 采集变更（全量快照，仅一次，restart 后可再次采集） |
+| `nopatch --max-restart <plan>` | 重启计划（释放数据 + 重置时间戳，准备下一轮采集） |
 | `nopatch --max-apply [plan...]` | 应用 Max 采集数据（手动，省略计划名则全部） |
 | `nopatch --tpl-apply [plan...]` | 应用模板（手动，省略计划名则全部） |
+| `nopatch --tpl-verify <plan>` | 验证模板计划（检查配置、文件、变量） |
 | `nopatch --debug` | 显示详细调试日志 |
 | `nopatch --help` | 显示帮助 |
 
 ---
 
-## 补丁
+## node_modules 补丁
 
 ### 创建补丁
 
@@ -81,7 +83,7 @@ nopatch/nopatch_ignore/@scope/package+1.0.0.gitignore
 
 ### 1. 手动创建计划配置
 
-在 `nopatch/tpl_config/` 下创建 `<plan-name>.toml`，参考 `_example.toml`。
+在 `nopatch/tpl_config/` 下创建 `<plan-name>.toml`，参考 `_example.toml`（中文）或 `_example.en.toml`（English）。
 
 ### 2. 放置模板文件
 
@@ -109,7 +111,7 @@ overwrite = false   # 目标存在时跳过（默认：true）
 
 [[dyna_file_path]]
 src      = "assets/icon.png"
-destRoot = "../res/drawable/icon.png"
+dest = "../res/drawable/icon.png"
 ```
 
 ### 路径字段
@@ -117,7 +119,6 @@ destRoot = "../res/drawable/icon.png"
 | 字段 | 基准 |
 |---|---|
 | `dest` | `output_base` |
-| `destRoot` | `output_base` |
 | `destAbs` | 操作系统根目录（绝对路径） |
 
 所有路径字段均支持 Mustache 变量替换。
@@ -143,13 +144,13 @@ nopatch --tpl-apply myplan
 
 ---
 
-## Max 模式
+## Max 模式 补丁
 
-基于时间戳的文件变更采集模式，适用于需要大量修改文件的场景。
+基于时间戳的文件变更采集模式，适用于需要大量修改文件的场景。每次采集为全量快照。
 
 ### 1. 手动创建计划配置
 
-在 `nopatch/max_mode_config/` 下创建 `<plan-name>.toml`，参考 `_example.toml`。
+在 `nopatch/max_mode_config/` 下创建 `<plan-name>.toml`，参考 `_example.toml`（中文）或 `_example.en.toml`（English）。
 
 ### 2. 启动录制（仅一次）
 
@@ -157,19 +158,19 @@ nopatch --tpl-apply myplan
 nopatch --max-start <plan-name>
 ```
 
-记录当前时间戳，不可重复执行。
+记录当前时间戳。不可重复执行。程序状态写入 TOML 的 `_state` 字段（禁止手动修改）。
 
-### 3. 编辑配置（可重复）
+### 3. 编辑配置、修改目标文件
 
 编辑 `watch_dirs`（支持文件和目录，不允许嵌套路径）和 `delete_paths`。
 
-### 4. 修改文件后，采集变更（可重复）
+### 4. 修改文件后，采集变更（每次 start 或 restart 后仅一次）
 
 ```bash
 nopatch --max-collect <plan-name>
 ```
 
-采集完成后自动禁用，需手动将 TOML 中 `enabled` 改回 `true` 才能再次采集。步骤 3-5 可重复。
+全量采集 mtime 晚于时间戳的文件。采集后锁定，需 `--max-restart` 才能再次采集。
 
 ### 5. 应用数据
 
@@ -181,6 +182,32 @@ nopatch --max-apply
 
 # 释放指定计划
 nopatch --max-apply plan-a plan-b
+```
+
+### 6. 继续修改（重启计划）
+
+```bash
+nopatch --max-restart <plan-name>
+```
+
+重置时间戳 → 释放当前数据。
+
+### 时序
+
+```
+start → modify → collect → ... restart → modify → collect → ... → apply
+  │        │        │             │         │        │              │
+  │        │        │             │         │        │         释放补丁到磁盘
+  │        │        │             │         │        │
+  │        │        │             │         │      全量补丁快照
+  │        │        │             │         │
+  │        │        │             │    手动修改目标文件 以及 watch_dirs/delete_paths
+  │        │        │       重置时间戳+释放旧数据 
+  │        │      全量补丁快照   
+  │        │
+  │   手动修改目标文件 以及 watch_dirs/delete_paths
+  │
+记录时间戳
 ```
 
 ---
@@ -215,10 +242,12 @@ nopatch/
 
   tpl_config/              # 模板配置
     _example.toml
+    _example.en.toml
     myplan.toml
 
   max_mode_config/         # Max 模式计划配置
     _example.toml
+    _example.en.toml
     myplan.toml
 
   max_mode_data/           # Max 模式采集数据

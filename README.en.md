@@ -27,16 +27,18 @@ That's it. A `postinstall` hook is automatically injected into your `package.jso
 | `nopatch <pkg>` | Create patch for a package |
 | `nopatch` | Apply all patches (postinstall) |
 | `nopatch --patch <pkg>` | Apply patch for a specific package |
-| `nopatch --max-start <plan>` | Start Max mode recording |
-| `nopatch --max-collect <plan>` | Collect changes once (re-call after re-enabling in TOML) |
+| `nopatch --max-start <plan>` | Start Max mode recording (records timestamp, once only) |
+| `nopatch --max-collect <plan>` | Collect changes (full snapshot, once only, restart to collect again) |
+| `nopatch --max-restart <plan>` | Restart plan (release data + reset timestamp for next collect) |
 | `nopatch --max-apply [plan...]` | Apply Max collected data (manual, all plans if omitted) |
 | `nopatch --tpl-apply [plan...]` | Apply templates (manual, all plans if omitted) |
+| `nopatch --tpl-verify <plan>` | Verify template plan (check config, files, variables) |
 | `nopatch --debug` | Show detailed debug output |
 | `nopatch --help` | Show help |
 
 ---
 
-## Patch
+## node_modules Patch
 
 ### Create Patch
 
@@ -81,7 +83,7 @@ Templates must be applied manually. They will not auto-apply on `npm install`.
 
 ### 1. Create Plan Config Manually
 
-Create `<plan-name>.toml` under `nopatch/tpl_config/`, see `_example.toml` for reference.
+Create `<plan-name>.toml` under `nopatch/tpl_config/`, see `_example.toml` (Chinese) or `_example.en.toml` (English) for reference.
 
 ### 2. Place Template Files
 
@@ -109,7 +111,7 @@ overwrite = false   # Skip if target exists (default: true)
 
 [[dyna_file_path]]
 src      = "assets/icon.png"
-destRoot = "../res/drawable/icon.png"
+dest = "../res/drawable/icon.png"
 ```
 
 ### Path Fields
@@ -117,7 +119,6 @@ destRoot = "../res/drawable/icon.png"
 | Field | Base |
 |---|---|
 | `dest` | `output_base` |
-| `destRoot` | `output_base` |
 | `destAbs` | OS root (absolute path) |
 
 All path fields support Mustache variable substitution.
@@ -143,13 +144,13 @@ nopatch --tpl-apply myplan
 
 ---
 
-## Max Mode
+## Max Mode Patch
 
-Timestamp-based file change collection, for scenarios requiring extensive file modifications.
+Timestamp-based file change collection, for scenarios requiring extensive file modifications. Each collect is a full snapshot.
 
 ### 1. Create Plan Config Manually
 
-Create `<plan-name>.toml` under `nopatch/max_mode_config/`, see `_example.toml` for reference.
+Create `<plan-name>.toml` under `nopatch/max_mode_config/`, see `_example.toml` (Chinese) or `_example.en.toml` (English) for reference.
 
 ### 2. Start Recording (once only)
 
@@ -157,19 +158,19 @@ Create `<plan-name>.toml` under `nopatch/max_mode_config/`, see `_example.toml` 
 nopatch --max-start <plan-name>
 ```
 
-Records the current timestamp. Cannot be re-executed.
+Records the current timestamp. Cannot be re-executed. Program state is stored in the `_state` field of the TOML (do not modify manually).
 
-### 3. Edit Configuration (repeatable)
+### 3. Edit Configuration 、Modify Target Files
 
 Edit `watch_dirs` (supports files and directories, nested paths not allowed) and `delete_paths`.
 
-### 4. After Modifying Files, Collect Changes (repeatable)
+### 4. After Modifying Files, Collect Changes (once per start or restart)
 
 ```bash
 nopatch --max-collect <plan-name>
 ```
 
-Auto-disables after collection. Set `enabled = true` in TOML to collect again. Steps 3-5 can be repeated.
+Full snapshot of all files with mtime later than the timestamp. Locked after collection, use `--max-restart` to collect again.
 
 ### 5. Apply Data
 
@@ -181,6 +182,32 @@ nopatch --max-apply
 
 # Apply specific plans
 nopatch --max-apply plan-a plan-b
+```
+
+### 6. Continue Modifying (Restart Plan)
+
+```bash
+nopatch --max-restart <plan-name>
+```
+
+Reset timestamp, release current data. 
+
+### Sequence
+
+```
+start → modify → collect → ... restart → modify → collect → ... → apply
+  │        │        │             │         │        │              │
+  │        │        │             │         │        │        release patch to disk
+  │        │        │             │         │        │
+  │        │        │             │         │     full patch snapshot
+  │        │        │             │         │
+  │        │        │             │     modify target files and watch_dirs/delete_paths
+  │        │        │    reset timestamp + release old data
+  │        │     full patch snapshot 
+  │        │
+  │    modify target files and watch_dirs/delete_paths
+  │
+record timestamp
 ```
 
 ---
@@ -215,10 +242,12 @@ nopatch/
 
   tpl_config/              # Template configs
     _example.toml
+    _example.en.toml
     myplan.toml
 
   max_mode_config/         # Max mode plan configs
     _example.toml
+    _example.en.toml
     myplan.toml
 
   max_mode_data/           # Max mode collected data

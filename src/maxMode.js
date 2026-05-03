@@ -1,11 +1,15 @@
 import fs from "fs";
 import path from "path";
+import crypto from "crypto";
 import toml from "toml";
 import { error, log } from "./utils.js";
 
 const NOPATCH_DIR = "nopatch";
 const MAX_CONFIG_DIR = "max_mode_config";
 const MAX_DATA_DIR = "max_mode_data";
+
+const HMAC_SECRET = "nopatch_max_state_v2";
+const RESTART_DELAY_MS = 500;
 
 function configPath(planName) {
   return path.join(process.cwd(), NOPATCH_DIR, MAX_CONFIG_DIR, `${planName}.toml`);
@@ -15,11 +19,11 @@ function dataDir(planName) {
   return path.join(process.cwd(), NOPATCH_DIR, MAX_DATA_DIR, planName);
 }
 
-function loadConfig(planName) {
+function readTomlFile(planName) {
   const p = configPath(planName);
   if (!fs.existsSync(p)) return null;
   try {
-    return toml.parse(fs.readFileSync(p, "utf8"));
+    return { parsed: toml.parse(fs.readFileSync(p, "utf8")), raw: fs.readFileSync(p, "utf8") };
   } catch (e) {
     error(`Error: Failed to parse config: ${p}`);
     error(e.message);
@@ -27,18 +31,72 @@ function loadConfig(planName) {
   }
 }
 
-function saveConfig(planName, config) {
+function signPayload(payload) {
+  const json = JSON.stringify(payload);
+  const hmac = crypto.createHmac("sha256", HMAC_SECRET).update(json).digest("hex");
+  return Buffer.from(json).toString("base64") + "." + hmac;
+}
+
+function verifyState(stateStr, planName) {
+  if (!stateStr) return null;
+
+  const dotIdx = stateStr.lastIndexOf(".");
+  if (dotIdx === -1) return null;
+
+  const b64 = stateStr.slice(0, dotIdx);
+  const hmac = stateStr.slice(dotIdx + 1);
+
+  let json;
+  try {
+    json = Buffer.from(b64, "base64").toString("utf8");
+  } catch {
+    return null;
+  }
+
+  const expectedHmac = crypto.createHmac("sha256", HMAC_SECRET).update(json).digest("hex");
+  if (hmac !== expectedHmac) return null;
+
+  let payload;
+  try {
+    payload = JSON.parse(json);
+  } catch {
+    return null;
+  }
+
+  if (payload.plan !== planName) return null;
+
+  return { timestamp: payload.timestamp, collected: payload.collected };
+}
+
+function readState(planName) {
+  const result = readTomlFile(planName);
+  if (!result) return null;
+
+  const stateStr = result.parsed._state;
+  if (!stateStr) return null;
+
+  return verifyState(stateStr, planName);
+}
+
+function writeState(planName, state) {
   const p = configPath(planName);
   let content = fs.readFileSync(p, "utf8");
 
-  content = content.replace(
-    /^timestamp\s*=\s*".*"/m,
-    `timestamp = "${config.timestamp}"`
-  );
-  content = content.replace(
-    /^enabled\s*=\s*(true|false)/m,
-    `enabled = ${config.enabled}`
-  );
+  const payload = {
+    plan: planName,
+    timestamp: state.timestamp,
+    collected: state.collected,
+  };
+  const signed = signPayload(payload);
+
+  if (content.includes("_state")) {
+    content = content.replace(
+      /^_state\s*=\s*".*"/m,
+      `_state = "${signed}"`
+    );
+  } else {
+    content = content.trimEnd() + `\n\n# 程序状态字段，极其重要，禁止手动修改或删除 | Program state field, extremely important, do NOT modify or delete manually\n_state = "${signed}"\n`;
+  }
 
   fs.writeFileSync(p, content, "utf8");
 }
@@ -68,25 +126,27 @@ function listPlans() {
 }
 
 export function maxStart(planName) {
-  const config = loadConfig(planName);
-  if (!config) {
+  const result = readTomlFile(planName);
+  if (!result) {
     error(`Error: Plan not found: ${planName}`);
     error(`   Create ${NOPATCH_DIR}/${MAX_CONFIG_DIR}/${planName}.toml first (see _example.toml)`);
     process.exit(1);
   }
 
-  if (config.timestamp) {
-    error(`Error: Plan "${planName}" already has a timestamp (${config.timestamp})`);
+  const existingState = readState(planName);
+  if (existingState) {
+    error(`Error: Plan "${planName}" already started (timestamp: ${existingState.timestamp})`);
     error(`   --max-start can only be executed once per plan`);
     process.exit(1);
   }
 
-  config.timestamp = new Date().toISOString();
-  config.enabled = true;
-
-  saveConfig(planName, config);
+  const state = {
+    timestamp: new Date().toISOString(),
+    collected: false,
+  };
+  writeState(planName, state);
   console.log(`max: plan "${planName}" started`);
-  console.log(`     timestamp: ${config.timestamp}`);
+  console.log(`     timestamp: ${state.timestamp}`);
 }
 
 function validateWatchDirs(watchDirs) {
@@ -148,21 +208,27 @@ function collectWatchPath(watchPath, cwd, ts, planDataDir) {
 }
 
 export function maxCollect(planName) {
-  const config = loadConfig(planName);
-  if (!config) {
+  const result = readTomlFile(planName);
+  if (!result) {
     error(`Error: Plan not found: ${planName}`);
     process.exit(1);
   }
 
-  if (!config.enabled) {
-    error(`Error: Plan "${planName}" is not enabled (set enabled = true in TOML)`);
+  const state = readState(planName);
+  if (!state) {
+    error(`Error: Plan "${planName}" has not been started (run --max-start first)`);
     process.exit(1);
   }
 
-  validateWatchDirs(config.watch_dirs);
+  if (state.collected) {
+    error(`Error: Plan "${planName}" has already been collected (run --max-restart first)`);
+    process.exit(1);
+  }
+
+  validateWatchDirs(result.parsed.watch_dirs);
 
   const cwd = process.cwd();
-  const ts = new Date(config.timestamp).getTime();
+  const ts = new Date(state.timestamp).getTime();
   const planDataDir = dataDir(planName);
 
   if (fs.existsSync(planDataDir)) {
@@ -172,11 +238,11 @@ export function maxCollect(planName) {
   let collectCount = 0;
   let deleteCount = 0;
 
-  for (const watchPath of config.watch_dirs || []) {
+  for (const watchPath of result.parsed.watch_dirs || []) {
     collectCount += collectWatchPath(watchPath, cwd, ts, planDataDir);
   }
 
-  for (const delPath of config.delete_paths || []) {
+  for (const delPath of result.parsed.delete_paths || []) {
     const destPath = path.join(planDataDir, `${delPath}.nopatch_delete`);
     fs.mkdirSync(path.dirname(destPath), { recursive: true });
     fs.writeFileSync(destPath, new Date().toISOString());
@@ -184,11 +250,44 @@ export function maxCollect(planName) {
     deleteCount++;
   }
 
-  config.enabled = false;
-  saveConfig(planName, config);
+  state.collected = true;
+  writeState(planName, state);
 
   console.log(`max: plan "${planName}" collected (${collectCount} files, ${deleteCount} deletes)`);
-  console.log(`     set enabled = true in TOML to collect again`);
+}
+
+export function maxRestart(planName) {
+  const result = readTomlFile(planName);
+  if (!result) {
+    error(`Error: Plan not found: ${planName}`);
+    process.exit(1);
+  }
+
+  const state = readState(planName);
+  if (!state) {
+    error(`Error: Plan "${planName}" has not been started (run --max-start first)`);
+    process.exit(1);
+  }
+
+  if (!state.collected) {
+    error(`Error: Plan "${planName}" has not been collected yet (run --max-collect first)`);
+    process.exit(1);
+  }
+
+  const newState = {
+    timestamp: new Date().toISOString(),
+    collected: false,
+  };
+  writeState(planName, newState);
+
+  setTimeout(() => {
+    const planDataDir = dataDir(planName);
+    if (fs.existsSync(planDataDir)) {
+      maxApply([planName]);
+    }
+    console.log(`max: plan "${planName}" restarted`);
+    console.log(`     timestamp: ${newState.timestamp}`);
+  }, RESTART_DELAY_MS);
 }
 
 export function maxApply(planNames) {

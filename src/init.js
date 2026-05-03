@@ -22,7 +22,9 @@ const COPY_FILES = [
   { src: "README.md", dst: "README.md" },
   { src: "README.en.md", dst: "README.en.md" },
   { src: "_example.toml", dst: "max_mode_config/_example.toml" },
+  { src: "_example.en.toml", dst: "max_mode_config/_example.en.toml" },
   { src: "_template.toml", dst: "tpl_config/_example.toml" },
+  { src: "_template.en.toml", dst: "tpl_config/_example.en.toml" },
 ];
 
 const COPY_DIRS = [

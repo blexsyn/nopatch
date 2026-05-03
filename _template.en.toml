@@ -1,0 +1,27 @@
+# nopatch template plan config
+# [vars] variables can be used in template content and path fields as {{varName}}
+
+[vars]
+name = "World"
+plan = "example"
+
+# base output directory, relative to package.json (project root)
+# unconfigured template files default to output_base at the same relative path
+output_base = "."
+
+# dynamic file paths config
+# only configure files that need non-default output paths
+# all paths below are relative to output_base
+#
+# [[dyna_file_path]]
+# src      = "path/to/file.mustache"
+#            # relative to tpl_record/<plan>/
+#
+# dest     = "subdir/SomeFile.java"
+#            # relative to output_base
+#
+# destAbs  = "C:/absolute/path/to/SomeFile.java"
+#            # absolute path from OS root
+#
+# overwrite = true
+#            # default true, overwrite if exists; false to skip if target already exists

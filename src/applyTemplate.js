@@ -89,6 +89,101 @@ function resolveDestPath(dest, destRoot, destAbs, vars, outputBaseDir) {
   return paths;
 }
 
+export function tplVerify(planName) {
+  const nopatchRoot = path.join(process.cwd(), NOPATCH_DIR);
+  const tplDir = path.join(nopatchRoot, TPL_RECORD_DIR, planName);
+  const configPath = path.join(nopatchRoot, TPL_CONFIG_DIR, `${planName}.toml`);
+
+  if (!fs.existsSync(tplDir)) {
+    error(`Error: Template plan not found: ${planName}`);
+    error(`   Expected directory: ${tplDir}`);
+    process.exit(1);
+  }
+
+  if (!fs.existsSync(configPath)) {
+    error(`Error: Config not found: ${configPath}`);
+    process.exit(1);
+  }
+
+  let parsed;
+  try {
+    parsed = toml.parse(fs.readFileSync(configPath, "utf8"));
+  } catch (e) {
+    error(`Error: Failed to parse ${configPath}: ${e.message}`);
+    process.exit(1);
+  }
+
+  const vars = parsed.vars || {};
+  const outputBase = parsed.output_base || ".";
+  const dynaPaths = parsed.dyna_file_path || [];
+  const outputBaseDir = path.resolve(process.cwd(), outputBase);
+
+  let errors = 0;
+  let warnings = 0;
+
+  const tplFiles = collectFiles(tplDir);
+  const tplFileSet = new Set(tplFiles);
+
+  for (const entry of dynaPaths) {
+    if (!entry.src) {
+      error(`  Error: [[dyna_file_path]] missing 'src' field`);
+      errors++;
+      continue;
+    }
+
+    if (!tplFileSet.has(entry.src)) {
+      error(`  Error: [[dyna_file_path]] src not found: ${entry.src}`);
+      errors++;
+    }
+
+    if (!entry.dest && !entry.destRoot && !entry.destAbs) {
+      error(`  Error: [[dyna_file_path]] for '${entry.src}' has no dest, destRoot or destAbs`);
+      errors++;
+    }
+
+    try {
+      resolveDestPath(entry.dest, entry.destRoot, entry.destAbs, vars, outputBaseDir);
+    } catch (e) {
+      error(`  Error: Path resolution failed for '${entry.src}': ${e.message}`);
+      errors++;
+    }
+  }
+
+  for (const relFile of tplFiles) {
+    const srcFile = path.join(tplDir, relFile);
+    const isMustache = relFile.endsWith(".mustache");
+
+    if (isMustache) {
+      try {
+        const content = fs.readFileSync(srcFile, "utf8");
+        const usedVars = new Set();
+        const re = /\{\{(\w+)\}\}/g;
+        let m;
+        while ((m = re.exec(content)) !== null) {
+          usedVars.add(m[1]);
+        }
+
+        for (const v of usedVars) {
+          if (!(v in vars)) {
+            console.log(`  Warning: variable '{{${v}}}' used in '${relFile}' but not declared in [vars]`);
+            warnings++;
+          }
+        }
+      } catch (e) {
+        error(`  Error: Failed to read '${relFile}': ${e.message}`);
+        errors++;
+      }
+    }
+  }
+
+  if (errors === 0 && warnings === 0) {
+    console.log(`tpl: plan "${planName}" verified OK`);
+  } else {
+    console.log(`tpl: plan "${planName}" verified with ${errors} error(s), ${warnings} warning(s)`);
+    if (errors > 0) process.exit(1);
+  }
+}
+
 export default async function applyTemplate(targetPlan) {
   const nopatchRoot = path.join(process.cwd(), NOPATCH_DIR);
   const cwd = process.cwd();

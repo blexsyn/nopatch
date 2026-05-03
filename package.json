@@ -11,7 +11,9 @@
     "README.md",
     "README.en.md",
     "_example.toml",
+    "_example.en.toml",
     "_template.toml",
+    "_template.en.toml",
     "_tpl_example/"
   ],
   "scripts": {
