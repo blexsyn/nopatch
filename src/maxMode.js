@@ -167,6 +167,19 @@ function validateWatchDirs(watchDirs) {
   }
 }
 
+function writeMetaFile(srcAbsPath, destLatestPath) {
+  const stat = fs.statSync(srcAbsPath);
+  const metaPath = destLatestPath.replace(/\.nopatch_latest$/, ".nopatch_meta");
+  const meta = [
+    `birthtime = ${stat.birthtimeMs}`,
+    `mtime = ${stat.mtimeMs}`,
+    `atime = ${stat.atimeMs}`,
+    `size = ${stat.size}`,
+    `mode = ${stat.mode}`,
+  ].join("\n");
+  fs.writeFileSync(metaPath, meta);
+}
+
 function collectWatchPath(watchPath, cwd, ts, planDataDir) {
   const absPath = path.join(cwd, watchPath);
 
@@ -183,6 +196,7 @@ function collectWatchPath(watchPath, cwd, ts, planDataDir) {
       const destPath = path.join(planDataDir, `${watchPath}.nopatch_latest`);
       fs.mkdirSync(path.dirname(destPath), { recursive: true });
       fs.copyFileSync(absPath, destPath);
+      writeMetaFile(absPath, destPath);
       console.log(`  [ADD] ${watchPath}`);
       count++;
     }
@@ -196,6 +210,7 @@ function collectWatchPath(watchPath, cwd, ts, planDataDir) {
           const destPath = path.join(planDataDir, `${destRel}.nopatch_latest`);
           fs.mkdirSync(path.dirname(destPath), { recursive: true });
           fs.copyFileSync(abs, destPath);
+          writeMetaFile(abs, destPath);
           console.log(`  [ADD] ${destRel}`);
           count++;
         }
@@ -255,6 +270,86 @@ export function maxCollect(planName) {
   writeState(planName, state);
 
   console.log(`max: plan "${planName}" collected (${collectCount} files, ${deleteCount} deletes)`);
+}
+
+export function maxCollectForce(planName) {
+  const result = readTomlFile(planName);
+  if (!result) {
+    error(`Error: Plan not found: ${planName}`);
+    process.exit(1);
+  }
+
+  const state = readState(planName);
+  if (!state) {
+    error(`Error: Plan "${planName}" has not been started (run --max-start first)`);
+    process.exit(1);
+  }
+
+  validateWatchDirs(result.parsed.watch_dirs);
+
+  const cwd = process.cwd();
+  const ts = new Date(state.timestamp).getTime();
+  const planDataDir = dataDir(planName);
+
+  if (fs.existsSync(planDataDir)) {
+    fs.rmSync(planDataDir, { recursive: true, force: true });
+  }
+
+  let collectCount = 0;
+  let deleteCount = 0;
+
+  for (const watchPath of result.parsed.watch_dirs || []) {
+    collectCount += collectWatchPath(watchPath, cwd, ts, planDataDir);
+  }
+
+  for (const delPath of result.parsed.delete_paths || []) {
+    const destPath = path.join(planDataDir, `${delPath}.nopatch_delete`);
+    fs.mkdirSync(path.dirname(destPath), { recursive: true });
+    fs.writeFileSync(destPath, new Date().toISOString());
+    console.log(`  [DEL] ${delPath}`);
+    deleteCount++;
+  }
+
+  console.log(`max: plan "${planName}" force collected (${collectCount} files, ${deleteCount} deletes)`);
+}
+
+export async function maxReset(planName, filePath) {
+  const result = readTomlFile(planName);
+  if (!result) {
+    error(`Error: Plan not found: ${planName}`);
+    process.exit(1);
+  }
+
+  const state = readState(planName);
+  if (!state) {
+    error(`Error: Plan "${planName}" has not been started (run --max-start first)`);
+    process.exit(1);
+  }
+
+  const absPath = path.resolve(filePath);
+  if (!fs.existsSync(absPath)) {
+    error(`Error: File not found: ${absPath}`);
+    process.exit(1);
+  }
+
+  const fileStat = fs.statSync(absPath);
+  const fileMtime = fileStat.mtime;
+
+  const newState = {
+    timestamp: fileMtime.toISOString(),
+    collected: false,
+  };
+  writeState(planName, newState);
+
+  await new Promise(resolve => setTimeout(resolve, RESTART_DELAY_MS));
+
+  const planDataDir = dataDir(planName);
+  if (fs.existsSync(planDataDir)) {
+    maxApply([planName]);
+  }
+  console.log(`max: plan "${planName}" reset`);
+  console.log(`     source: ${absPath}`);
+  console.log(`     timestamp: ${newState.timestamp}`);
 }
 
 export async function maxRestart(planName) {

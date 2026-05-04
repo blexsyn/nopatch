@@ -44,7 +44,7 @@ function collectPlanDirs(nopatchRoot) {
 
 function loadPlanConfig(configPath) {
   if (!fs.existsSync(configPath)) {
-    log(`No config found at ${configPath}, using defaults`);
+    console.log(`No config found at ${configPath}, using defaults`);
     return { vars: {}, outputBase: ".", dynaPaths: [] };
   }
 
@@ -52,7 +52,7 @@ function loadPlanConfig(configPath) {
     const parsed = toml.parse(fs.readFileSync(configPath, "utf8"));
     return {
       vars: parsed.vars || {},
-      outputBase: parsed.output_base || ".",
+      outputBase: (parsed.output_base || ".").replace(/^[\/\\]+/, ""),
       dynaPaths: parsed.dyna_file_path || [],
     };
   } catch (e) {
@@ -114,7 +114,7 @@ export function tplVerify(planName) {
   }
 
   const vars = parsed.vars || {};
-  const outputBase = parsed.output_base || ".";
+  const outputBase = (parsed.output_base || ".").replace(/^[\/\\]+/, "");
   const dynaPaths = parsed.dyna_file_path || [];
   const outputBaseDir = path.resolve(process.cwd(), outputBase);
 

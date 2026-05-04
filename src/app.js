@@ -6,7 +6,9 @@ import { checkAndFix } from "./init.js";
 import {
   maxStart,
   maxCollect,
+  maxCollectForce,
   maxRestart,
+  maxReset,
   maxApply,
 } from "./maxMode.js";
 
@@ -26,7 +28,9 @@ Usage:
 Max mode:
   nopatch --max-start <plan>      Start a recording session (edit TOML to configure)
   nopatch --max-collect <plan>     Collect changes (once only, restart to collect again)
+  nopatch --max-collect-force <plan>  Force collect (skip collected check, no timestamp reset)
   nopatch --max-restart <plan>     Restart plan: release data, reset timestamp for next collect
+  nopatch --max-reset <plan> <file>  Reset plan: use file's mtime as timestamp, release data
   nopatch --max-apply [plan...]    Apply collected data (manual only, all plans if omitted)
 
 Template:
@@ -39,7 +43,9 @@ Examples:
   nopatch --patch braces
   nopatch --max-start myplan
   nopatch --max-collect myplan
+  nopatch --max-collect-force myplan
   nopatch --max-restart myplan
+  nopatch --max-reset myplan node_modules/debug/package.json
   nopatch --max-apply
   nopatch --tpl-apply
   nopatch --tpl-apply myplan
@@ -55,13 +61,15 @@ Options:
 
 const maxStartIndex = args.findIndex((a) => a === "--max-start");
 const maxCollectIndex = args.findIndex((a) => a === "--max-collect");
+const maxCollectForceIndex = args.findIndex((a) => a === "--max-collect-force");
 const maxRestartIndex = args.findIndex((a) => a === "--max-restart");
+const maxResetIndex = args.findIndex((a) => a === "--max-reset");
 const maxApplyIndex = args.findIndex((a) => a === "--max-apply");
 const tplApplyIndex = args.findIndex((a) => a === "--tpl-apply");
 const tplVerifyIndex = args.findIndex((a) => a === "--tpl-verify");
 
 const maxFlagIndices = [
-  maxStartIndex, maxCollectIndex, maxRestartIndex, maxApplyIndex, tplApplyIndex, tplVerifyIndex,
+  maxStartIndex, maxCollectIndex, maxCollectForceIndex, maxRestartIndex, maxResetIndex, maxApplyIndex, tplApplyIndex, tplVerifyIndex,
 ].filter((i) => i !== -1);
 
 if (maxFlagIndices.length > 0) {
@@ -90,6 +98,16 @@ if (maxFlagIndices.length > 0) {
     process.exit(0);
   }
 
+  if (maxCollectForceIndex !== -1) {
+    const planName = args[maxCollectForceIndex + 1];
+    if (!planName) {
+      console.error("Error: --max-collect-force requires a plan name");
+      process.exit(1);
+    }
+    maxCollectForce(planName);
+    process.exit(0);
+  }
+
   if (maxRestartIndex !== -1) {
     const planName = args[maxRestartIndex + 1];
     if (!planName) {
@@ -97,6 +115,21 @@ if (maxFlagIndices.length > 0) {
       process.exit(1);
     }
     await maxRestart(planName);
+    process.exit(0);
+  }
+
+  if (maxResetIndex !== -1) {
+    const planName = args[maxResetIndex + 1];
+    const filePath = args[maxResetIndex + 2];
+    if (!planName) {
+      console.error("Error: --max-reset requires a plan name");
+      process.exit(1);
+    }
+    if (!filePath) {
+      console.error("Error: --max-reset requires a file path");
+      process.exit(1);
+    }
+    await maxReset(planName, filePath);
     process.exit(0);
   }
 
@@ -137,7 +170,7 @@ const patchFlag = args.find((a) => a.startsWith("--patch="))?.split("=")[1]
 
 const knownFlags = [
   "--patch", "--help", "-h", "--debug",
-  "--max-start", "--max-collect", "--max-restart", "--max-apply",
+  "--max-start", "--max-collect", "--max-collect-force", "--max-restart", "--max-reset", "--max-apply",
   "--tpl-apply", "--tpl-verify",
 ];
 const unknownFlags = args.filter(

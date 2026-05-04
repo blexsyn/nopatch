@@ -1,17 +1,31 @@
 # nopatch template plan config
-# [vars] variables can be used in template content and path fields as {{varName}}
+# ==============================
+# Rename this file to <your-plan-name>.toml to create a plan.
+#
+# File structure:
+#   output_base         — output base directory (top-level key, before [vars])
+#   [vars]              — template variables (only for {{varName}} substitution)
+#   [[dyna_file_path]]  — dynamic paths (top-level array, after [vars])
+#
+# ⚠️ Note: output_base and [[dyna_file_path]] are top-level structural config, do NOT write inside [vars].
 
+# base output directory, relative to package.json (project root)
+# template files without dyna_file_path default to this directory at the same relative path
+output_base = "."
+
+# ============================================================
+# [vars] — template variables
+# Declare variables here for use in template content and path fields as {{varName}}
+# ============================================================
 [vars]
 name = "World"
 plan = "example"
 
-# base output directory, relative to package.json (project root)
-# unconfigured template files default to output_base at the same relative path
-output_base = "."
-
-# dynamic file paths config
-# only configure files that need non-default output paths
-# all paths below are relative to output_base
+# ============================================================
+# Dynamic file paths config (top-level array, NOT inside [vars])
+# Only configure files that need non-default output paths
+# All paths below are relative to output_base
+# ============================================================
 #
 # [[dyna_file_path]]
 # src      = "path/to/file.mustache"

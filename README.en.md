@@ -29,7 +29,9 @@ That's it. A `postinstall` hook is automatically injected into your `package.jso
 | `nopatch --patch <pkg>` | Apply patch for a specific package |
 | `nopatch --max-start <plan>` | Start Max mode recording (records timestamp, once only) |
 | `nopatch --max-collect <plan>` | Collect changes (full snapshot, once only, restart to collect again) |
+| `nopatch --max-collect-force <plan>` | Force collect (skip collected check, no timestamp reset, no patch release, no lock) |
 | `nopatch --max-restart <plan>` | Restart plan (release data + reset timestamp for next collect) |
+| `nopatch --max-reset <plan> <file>` | Reset plan (use file's mtime as timestamp, release data) |
 | `nopatch --max-apply [plan...]` | Apply Max collected data (manual, all plans if omitted) |
 | `nopatch --tpl-apply [plan...]` | Apply templates (manual, all plans if omitted) |
 | `nopatch --tpl-verify <plan>` | Verify template plan (check config, files, variables) |
@@ -190,7 +192,15 @@ nopatch --max-apply plan-a plan-b
 nopatch --max-restart <plan-name>
 ```
 
-Reset timestamp, release current data. 
+Reset timestamp, release current data.
+
+### 7. Manual Timestamp (Reset Plan)
+
+```bash
+nopatch --max-reset <plan-name> <file-path>
+```
+
+Use the specified file's modification time as the new timestamp, release current data. Useful after `npm install` to baseline against a freshly installed file.
 
 ### Sequence
 

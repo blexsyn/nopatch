@@ -29,7 +29,9 @@ npm install nopatch --save-dev
 | `nopatch --patch <pkg>` | 应用指定包的补丁 |
 | `nopatch --max-start <plan>` | 启动 Max 模式录制（记录时间戳，不可重复） |
 | `nopatch --max-collect <plan>` | 采集变更（全量快照，仅一次，restart 后可再次采集） |
+| `nopatch --max-collect-force <plan>` | 强制采集（跳过已采集检查，不重置时间戳，不释放补丁，不锁定） |
 | `nopatch --max-restart <plan>` | 重启计划（释放数据 + 重置时间戳，准备下一轮采集） |
+| `nopatch --max-reset <plan> <file>` | 重置计划（以指定文件的修改时间作为时间戳，释放数据） |
 | `nopatch --max-apply [plan...]` | 应用 Max 采集数据（手动，省略计划名则全部） |
 | `nopatch --tpl-apply [plan...]` | 应用模板（手动，省略计划名则全部） |
 | `nopatch --tpl-verify <plan>` | 验证模板计划（检查配置、文件、变量） |
@@ -191,6 +193,14 @@ nopatch --max-restart <plan-name>
 ```
 
 重置时间戳 → 释放当前数据。
+
+### 7. 手动指定时间戳（重置计划）
+
+```bash
+nopatch --max-reset <plan-name> <file-path>
+```
+
+以指定文件的修改时间作为新时间戳，释放当前数据。适用于 `npm install` 后以某个新安装文件的时间为基准。
 
 ### 时序
 
