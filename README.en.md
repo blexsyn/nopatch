@@ -33,6 +33,7 @@ That's it. A `postinstall` hook is automatically injected into your `package.jso
 | `nopatch --max-restart <plan>` | Restart plan (release data + reset timestamp for next collect) |
 | `nopatch --max-reset <plan> <file>` | Reset plan (use file's mtime as timestamp, release data) |
 | `nopatch --max-apply [plan...]` | Apply Max collected data (manual, all plans if omitted) |
+| `nopatch --max-diff <plan>` | Diff collected data vs local files (view only) |
 | `nopatch --tpl-apply [plan...]` | Apply templates (manual, all plans if omitted) |
 | `nopatch --tpl-verify <plan>` | Verify template plan (check config, files, variables) |
 | `nopatch --debug` | Show detailed debug output |

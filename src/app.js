@@ -1,7 +1,9 @@
 #!/usr/bin/env node
+import readline from "readline";
 import createPatch from "./createPatch.js";
 import applyPatch from "./applyPatch.js";
 import applyTemplate, { tplVerify } from "./applyTemplate.js";
+import { maxDiff } from "./maxDiff.js";
 import { checkAndFix } from "./init.js";
 import {
   maxStart,
@@ -32,6 +34,7 @@ Max mode:
   nopatch --max-restart <plan>     Restart plan: release data, reset timestamp for next collect
   nopatch --max-reset <plan> <file>  Reset plan: use file's mtime as timestamp, release data
   nopatch --max-apply [plan...]    Apply collected data (manual only, all plans if omitted)
+  nopatch --max-diff <plan>        Diff collected data vs current files (view only)
 
 Template:
   nopatch --tpl-apply [plan...]    Apply templates (manual only, all plans if omitted)
@@ -47,6 +50,7 @@ Examples:
   nopatch --max-restart myplan
   nopatch --max-reset myplan node_modules/debug/package.json
   nopatch --max-apply
+  nopatch --max-diff myplan
   nopatch --tpl-apply
   nopatch --tpl-apply myplan
   nopatch --tpl-verify myplan
@@ -65,12 +69,36 @@ const maxCollectForceIndex = args.findIndex((a) => a === "--max-collect-force");
 const maxRestartIndex = args.findIndex((a) => a === "--max-restart");
 const maxResetIndex = args.findIndex((a) => a === "--max-reset");
 const maxApplyIndex = args.findIndex((a) => a === "--max-apply");
+const maxDiffIndex = args.findIndex((a) => a === "--max-diff");
 const tplApplyIndex = args.findIndex((a) => a === "--tpl-apply");
 const tplVerifyIndex = args.findIndex((a) => a === "--tpl-verify");
 
 const maxFlagIndices = [
-  maxStartIndex, maxCollectIndex, maxCollectForceIndex, maxRestartIndex, maxResetIndex, maxApplyIndex, tplApplyIndex, tplVerifyIndex,
+  maxStartIndex, maxCollectIndex, maxRestartIndex, maxResetIndex, maxApplyIndex, maxDiffIndex, tplApplyIndex, tplVerifyIndex,
 ].filter((i) => i !== -1);
+
+if (maxCollectForceIndex !== -1) {
+  const planName = args[maxCollectForceIndex + 1];
+  if (!planName) {
+    console.error("Error: --max-collect-force requires a plan name");
+    process.exit(1);
+  }
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  rl.question(
+    `\n⚠  WARNING: --max-collect-force will force collect without resetting timestamp.\n` +
+    `   This may cause duplicate or inconsistent data.\n` +
+    `   Type "${planName}" to confirm: `,
+    (answer) => {
+      rl.close();
+      if (answer.trim() !== planName) {
+        console.log("Cancelled.");
+        process.exit(0);
+      }
+      maxCollectForce(planName);
+      process.exit(0);
+    }
+  );
+} else {
 
 if (maxFlagIndices.length > 0) {
   const maxFlagValueIndices = new Set();
@@ -95,16 +123,6 @@ if (maxFlagIndices.length > 0) {
       process.exit(1);
     }
     maxCollect(planName);
-    process.exit(0);
-  }
-
-  if (maxCollectForceIndex !== -1) {
-    const planName = args[maxCollectForceIndex + 1];
-    if (!planName) {
-      console.error("Error: --max-collect-force requires a plan name");
-      process.exit(1);
-    }
-    maxCollectForce(planName);
     process.exit(0);
   }
 
@@ -143,6 +161,16 @@ if (maxFlagIndices.length > 0) {
     process.exit(0);
   }
 
+  if (maxDiffIndex !== -1) {
+    const planName = args[maxDiffIndex + 1];
+    if (!planName) {
+      console.error("Error: --max-diff requires a plan name");
+      process.exit(1);
+    }
+    await maxDiff(planName);
+    process.exit(0);
+  }
+
   if (tplApplyIndex !== -1) {
     const planNames = [];
     for (let i = tplApplyIndex + 1; i < args.length; i++) {
@@ -170,7 +198,7 @@ const patchFlag = args.find((a) => a.startsWith("--patch="))?.split("=")[1]
 
 const knownFlags = [
   "--patch", "--help", "-h", "--debug",
-  "--max-start", "--max-collect", "--max-collect-force", "--max-restart", "--max-reset", "--max-apply",
+  "--max-start", "--max-collect", "--max-collect-force", "--max-restart", "--max-reset", "--max-apply", "--max-diff",
   "--tpl-apply", "--tpl-verify",
 ];
 const unknownFlags = args.filter(
@@ -197,4 +225,5 @@ if (positional.length > 0) {
 } else {
   checkAndFix(process.cwd());
   await applyPatch(patchFlag ?? undefined);
+}
 }
