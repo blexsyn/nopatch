@@ -147,7 +147,7 @@ if (maxFlagIndices.length > 0) {
       console.error("Error: --max-reset requires a file path");
       process.exit(1);
     }
-    await maxReset(planName, filePath);
+    maxReset(planName, filePath);
     process.exit(0);
   }
 

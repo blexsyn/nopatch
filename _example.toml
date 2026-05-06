@@ -6,7 +6,7 @@
 #   1. 在 max_mode_config/ 下创建 <plan-name>.toml
 #   2. 执行：nopatch --max-start <plan-name>
 #      （记录当前时间戳，不可重复执行）
-#   3. 编辑下方的 watch_dirs 和 delete_paths
+#   3. 编辑下方的 watch_dirs、delete_paths 和 ignore_patterns
 #   4. 修改监听路径中的文件
 #   5. 执行：nopatch --max-collect <plan-name>
 #      （采集一次变更，全量快照）
@@ -16,6 +16,11 @@
 #      （省略计划名则释放全部，指定则释放部分）
 #   7. 继续修改：nopatch --max-restart <plan-name>
 #      （释放当前数据，重置时间戳，准备下一轮采集）
+#
+# 其他命令：
+#   nopatch --max-reset <plan> <file>
+#      （手动指定时间戳，从指定文件提取修改时间作为新的时间戳）
+#      （不释放补丁，仅重置时间戳）
 
 # 需要监听变更的文件或目录
 # 路径相对于项目根目录（package.json 所在目录）
@@ -31,4 +36,19 @@ watch_dirs = [
 # 示例：["node_modules/some-package/dist/unwanted.js"]
 delete_paths = [
   # "node_modules/example-package/deprecated.js",
+]
+
+# 采集时忽略的文件/目录模式
+# 支持 glob 模式：
+#   - "node_modules/"     # 忽略名为 node_modules 的目录
+#   - "*.log"             # 忽略所有 .log 文件
+#   - "**/node_modules/"  # 忽略任意深度的 node_modules 目录
+#   - "**/*.lock"         # 忽略任意深度的 .lock 文件
+#   - "temp/"             # 忽略名为 temp 的目录及其内容
+# 示例：["node_modules/", "*.log", "**/*.lock"]
+ignore_patterns = [
+  # "node_modules/",
+  # "**/node_modules/",
+  # "*.log",
+  # "**/*.lock",
 ]

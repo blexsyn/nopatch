@@ -101,15 +101,58 @@ function writeState(planName, state) {
   fs.writeFileSync(p, content, "utf8");
 }
 
-function collectFiles(dir, base = dir, result = []) {
+function matchesPattern(filePath, patterns) {
+  if (!patterns || patterns.length === 0) return false;
+  
+  for (const pattern of patterns) {
+    if (pattern.endsWith("/")) {
+      const dirPattern = pattern.slice(0, -1);
+      
+      if (dirPattern.startsWith("**/")) {
+        const targetDir = dirPattern.slice(3);
+        const regex = new RegExp(`(^|/)${targetDir}($|/)`);
+        if (regex.test(filePath)) return true;
+      } else {
+        if (filePath === dirPattern) return true;
+        if (filePath.startsWith(dirPattern + "/")) return true;
+      }
+    } else if (pattern.includes("**")) {
+      const [before, after] = pattern.split("**");
+      const beforeMatch = !before || filePath.startsWith(before);
+      const afterMatch = !after || filePath.endsWith(after);
+      if (beforeMatch && afterMatch) return true;
+    } else if (pattern.includes("*")) {
+      const regexStr = "^" + pattern.replace(/\*/g, "[^/]*") + "$";
+      const regex = new RegExp(regexStr);
+      if (regex.test(filePath)) return true;
+      const fileName = filePath.split("/").pop();
+      if (regex.test(fileName)) return true;
+    } else {
+      if (filePath === pattern) return true;
+      if (filePath.startsWith(pattern + "/")) return true;
+    }
+  }
+  return false;
+}
+
+function collectFiles(dir, base = dir, result = [], ignorePatterns = []) {
   if (!fs.existsSync(dir)) return result;
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
+    const rel = path.relative(base, full).replace(/\\/g, "/");
+    
+    if (matchesPattern(rel, ignorePatterns)) {
+      if (entry.isDirectory()) {
+        console.log(`  [SKIP DIR] ${rel} (ignored)`);
+      }
+      continue;
+    }
+    
     if (entry.isDirectory()) {
-      collectFiles(full, base, result);
+      collectFiles(full, base, result, ignorePatterns);
     } else {
       result.push({
-        rel: path.relative(base, full).replace(/\\/g, "/"),
+        rel: rel,
         abs: full,
       });
     }
@@ -150,17 +193,28 @@ export function maxStart(planName) {
 }
 
 function validateWatchDirs(watchDirs) {
-  if (!watchDirs || watchDirs.length <= 1) return;
+  if (!watchDirs || watchDirs.length === 0) return;
 
-  const normalized = watchDirs
-    .map(d => d.replace(/\\/g, "/").replace(/\/+$/, ""))
-    .sort();
+  const normalized = watchDirs.map(d => d.replace(/\\/g, "/").replace(/\/+$/, ""));
 
-  for (let i = 0; i < normalized.length - 1; i++) {
-    const a = normalized[i];
-    const b = normalized[i + 1];
-    if (b.startsWith(a + "/") || a === b) {
-      error(`Error: Nested watch paths detected: "${watchDirs[i]}" and "${watchDirs[i + 1]}"`);
+  const seen = new Set();
+  for (const p of normalized) {
+    if (seen.has(p)) {
+      error(`Error: Duplicate watch path: "${p}"`);
+      process.exit(1);
+    }
+    seen.add(p);
+  }
+
+  if (normalized.length <= 1) return;
+
+  const sorted = [...normalized].sort();
+
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const a = sorted[i];
+    const b = sorted[i + 1];
+    if (b.startsWith(a + "/")) {
+      error(`Error: Nested watch paths detected: "${watchDirs[normalized.indexOf(a)]}" and "${watchDirs[normalized.indexOf(b)]}"`);
       error(`   Nested paths are not allowed in watch_dirs`);
       process.exit(1);
     }
@@ -180,7 +234,7 @@ function writeMetaFile(srcAbsPath, destLatestPath) {
   fs.writeFileSync(metaPath, meta);
 }
 
-function collectWatchPath(watchPath, cwd, ts, planDataDir) {
+function collectWatchPath(watchPath, cwd, ts, planDataDir, ignorePatterns = []) {
   const absPath = path.join(cwd, watchPath);
 
   if (!fs.existsSync(absPath)) {
@@ -201,7 +255,7 @@ function collectWatchPath(watchPath, cwd, ts, planDataDir) {
       count++;
     }
   } else if (stat.isDirectory()) {
-    const files = collectFiles(absPath);
+    const files = collectFiles(absPath, cwd, [], ignorePatterns);
     for (const { rel, abs } of files) {
       try {
         const fstat = fs.statSync(abs);
@@ -254,8 +308,10 @@ export function maxCollect(planName) {
   let collectCount = 0;
   let deleteCount = 0;
 
+  const ignorePatterns = result.parsed.ignore_patterns || [];
+
   for (const watchPath of result.parsed.watch_dirs || []) {
-    collectCount += collectWatchPath(watchPath, cwd, ts, planDataDir);
+    collectCount += collectWatchPath(watchPath, cwd, ts, planDataDir, ignorePatterns);
   }
 
   for (const delPath of result.parsed.delete_paths || []) {
@@ -298,8 +354,10 @@ export function maxCollectForce(planName) {
   let collectCount = 0;
   let deleteCount = 0;
 
+  const ignorePatterns = result.parsed.ignore_patterns || [];
+
   for (const watchPath of result.parsed.watch_dirs || []) {
-    collectCount += collectWatchPath(watchPath, cwd, ts, planDataDir);
+    collectCount += collectWatchPath(watchPath, cwd, ts, planDataDir, ignorePatterns);
   }
 
   for (const delPath of result.parsed.delete_paths || []) {
@@ -313,7 +371,7 @@ export function maxCollectForce(planName) {
   console.log(`max: plan "${planName}" force collected (${collectCount} files, ${deleteCount} deletes)`);
 }
 
-export async function maxReset(planName, filePath) {
+export function maxReset(planName, filePath) {
   const result = readTomlFile(planName);
   if (!result) {
     error(`Error: Plan not found: ${planName}`);
@@ -333,7 +391,7 @@ export async function maxReset(planName, filePath) {
   }
 
   const fileStat = fs.statSync(absPath);
-  const fileMtime = fileStat.mtime;
+  const fileMtime = new Date(fileStat.mtimeMs + 500);
 
   const newState = {
     timestamp: fileMtime.toISOString(),
@@ -341,12 +399,6 @@ export async function maxReset(planName, filePath) {
   };
   writeState(planName, newState);
 
-  await new Promise(resolve => setTimeout(resolve, RESTART_DELAY_MS));
-
-  const planDataDir = dataDir(planName);
-  if (fs.existsSync(planDataDir)) {
-    maxApply([planName]);
-  }
   console.log(`max: plan "${planName}" reset`);
   console.log(`     source: ${absPath}`);
   console.log(`     timestamp: ${newState.timestamp}`);

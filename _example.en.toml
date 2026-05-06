@@ -6,7 +6,7 @@
 #   1. Create <plan-name>.toml in max_mode_config/
 #   2. Run: nopatch --max-start <plan-name>
 #      (records current timestamp, cannot be re-executed)
-#   3. Edit watch_dirs and delete_paths below
+#   3. Edit watch_dirs, delete_paths and ignore_patterns below
 #   4. Modify files in the watched paths
 #   5. Run: nopatch --max-collect <plan-name>
 #      (collects changes once, full snapshot)
@@ -16,6 +16,11 @@
 #      (omit plan names to apply all, specify names for partial)
 #   7. To continue modifying: nopatch --max-restart <plan-name>
 #      (releases current data, resets timestamp, ready for next collect)
+#
+# Other commands:
+#   nopatch --max-reset <plan> <file>
+#      (manually set timestamp from a file's modification time)
+#      (does not apply patches, only resets timestamp)
 
 # Files or directories to watch for changes
 # Paths are relative to the project root (where package.json is located)
@@ -31,4 +36,19 @@ watch_dirs = [
 # Example: ["node_modules/some-package/dist/unwanted.js"]
 delete_paths = [
   # "node_modules/example-package/deprecated.js",
+]
+
+# Patterns to ignore during collection
+# Supports glob patterns:
+#   - "node_modules/"     # ignore directory named node_modules
+#   - "*.log"             # ignore all .log files
+#   - "**/node_modules/"  # ignore node_modules at any depth
+#   - "**/*.lock"         # ignore .lock files at any depth
+#   - "temp/"             # ignore directory named temp and its contents
+# Example: ["node_modules/", "*.log", "**/*.lock"]
+ignore_patterns = [
+  # "node_modules/",
+  # "**/node_modules/",
+  # "*.log",
+  # "**/*.lock",
 ]
