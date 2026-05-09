@@ -23,7 +23,7 @@ function readTomlFile(planName) {
   const p = configPath(planName);
   if (!fs.existsSync(p)) return null;
   try {
-    return { parsed: toml.parse(fs.readFileSync(p, "utf8")), raw: fs.readFileSync(p, "utf8") };
+    return { parsed: toml.parse(fs.readFileSync(p, "utf8")), raw: fs.readFileSync(p, "utf8"), filePath: p };
   } catch (e) {
     error(`Error: Failed to parse config: ${p}`);
     error(e.message);
@@ -135,21 +135,24 @@ function matchesPattern(filePath, patterns) {
   return false;
 }
 
-function collectFiles(dir, base = dir, result = [], ignorePatterns = []) {
+function collectFiles(dir, base = dir, result = [], ignorePatterns = [], rootPath = null) {
   if (!fs.existsSync(dir)) return result;
+  if (rootPath === null) rootPath = base;
+  
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
     const rel = path.relative(base, full).replace(/\\/g, "/");
+    const fullRelPath = path.relative(rootPath, full).replace(/\\/g, "/");
     
-    if (matchesPattern(rel, ignorePatterns)) {
+    if (matchesPattern(fullRelPath, ignorePatterns)) {
       if (entry.isDirectory()) {
-        console.log(`  [SKIP DIR] ${rel} (ignored)`);
+        console.log(`  [SKIP DIR] ${fullRelPath} (ignored)`);
       }
       continue;
     }
     
     if (entry.isDirectory()) {
-      collectFiles(full, base, result, ignorePatterns);
+      collectFiles(full, base, result, ignorePatterns, rootPath);
     } else {
       result.push({
         rel: rel,
@@ -255,7 +258,7 @@ function collectWatchPath(watchPath, cwd, ts, planDataDir, ignorePatterns = []) 
       count++;
     }
   } else if (stat.isDirectory()) {
-    const files = collectFiles(absPath, cwd, [], ignorePatterns);
+    const files = collectFiles(absPath, absPath, [], ignorePatterns, cwd);
     for (const { rel, abs } of files) {
       try {
         const fstat = fs.statSync(abs);
@@ -306,7 +309,6 @@ export function maxCollect(planName) {
   }
 
   let collectCount = 0;
-  let deleteCount = 0;
 
   const ignorePatterns = result.parsed.ignore_patterns || [];
 
@@ -314,18 +316,10 @@ export function maxCollect(planName) {
     collectCount += collectWatchPath(watchPath, cwd, ts, planDataDir, ignorePatterns);
   }
 
-  for (const delPath of result.parsed.delete_paths || []) {
-    const destPath = path.join(planDataDir, `${delPath}.nopatch_delete`);
-    fs.mkdirSync(path.dirname(destPath), { recursive: true });
-    fs.writeFileSync(destPath, new Date().toISOString());
-    console.log(`  [DEL] ${delPath}`);
-    deleteCount++;
-  }
-
   state.collected = true;
   writeState(planName, state);
 
-  console.log(`max: plan "${planName}" collected (${collectCount} files, ${deleteCount} deletes)`);
+  console.log(`max: plan "${planName}" collected (${collectCount} files)`);
 }
 
 export function maxCollectForce(planName) {
@@ -352,7 +346,6 @@ export function maxCollectForce(planName) {
   }
 
   let collectCount = 0;
-  let deleteCount = 0;
 
   const ignorePatterns = result.parsed.ignore_patterns || [];
 
@@ -360,18 +353,48 @@ export function maxCollectForce(planName) {
     collectCount += collectWatchPath(watchPath, cwd, ts, planDataDir, ignorePatterns);
   }
 
-  for (const delPath of result.parsed.delete_paths || []) {
-    const destPath = path.join(planDataDir, `${delPath}.nopatch_delete`);
-    fs.mkdirSync(path.dirname(destPath), { recursive: true });
-    fs.writeFileSync(destPath, new Date().toISOString());
-    console.log(`  [DEL] ${delPath}`);
-    deleteCount++;
-  }
-
-  console.log(`max: plan "${planName}" force collected (${collectCount} files, ${deleteCount} deletes)`);
+  console.log(`max: plan "${planName}" force collected (${collectCount} files)`);
 }
 
 export function maxReset(planName, filePath) {
+  const result = readTomlFile(planName);
+  if (!result) {
+    error(`Error: Plan not found: ${planName}`);
+    process.exit(1);
+  }
+
+  let state = readState(planName);
+  if (!state) {
+    console.log(`max: plan "${planName}" not started, auto-starting...`);
+    state = {
+      timestamp: new Date().toISOString(),
+      collected: false,
+    };
+    writeState(planName, state);
+    console.log(`     timestamp: ${state.timestamp}`);
+  }
+
+  const absPath = path.resolve(filePath);
+  if (!fs.existsSync(absPath)) {
+    error(`Error: File not found: ${absPath}`);
+    process.exit(1);
+  }
+
+  const fileStat = fs.statSync(absPath);
+  const fileMtime = new Date(fileStat.mtimeMs + 5000);
+
+  const newState = {
+    timestamp: fileMtime.toISOString(),
+    collected: false,
+  };
+  writeState(planName, newState);
+
+  console.log(`max: plan "${planName}" reset`);
+  console.log(`     source: ${absPath}`);
+  console.log(`     timestamp: ${newState.timestamp}`);
+}
+
+export async function maxCollectFile(planName, absFilePath) {
   const result = readTomlFile(planName);
   if (!result) {
     error(`Error: Plan not found: ${planName}`);
@@ -384,24 +407,75 @@ export function maxReset(planName, filePath) {
     process.exit(1);
   }
 
-  const absPath = path.resolve(filePath);
+  const absPath = path.resolve(absFilePath);
   if (!fs.existsSync(absPath)) {
     error(`Error: File not found: ${absPath}`);
     process.exit(1);
   }
 
-  const fileStat = fs.statSync(absPath);
-  const fileMtime = new Date(fileStat.mtimeMs + 500);
+  const stat = fs.statSync(absPath);
+  if (!stat.isFile()) {
+    error(`Error: Not a file: ${absPath}`);
+    process.exit(1);
+  }
 
-  const newState = {
-    timestamp: fileMtime.toISOString(),
-    collected: false,
-  };
-  writeState(planName, newState);
+  const cwd = process.cwd();
+  const watchPath = path.relative(cwd, absPath).replace(/\\/g, "/");
+  const watchDirs = result.parsed.watch_dirs || [];
 
-  console.log(`max: plan "${planName}" reset`);
+  let isInWatchDir = false;
+  for (const wd of watchDirs) {
+    if (watchPath.startsWith(wd + "/") || watchPath === wd) {
+      isInWatchDir = true;
+      break;
+    }
+  }
+
+  if (!isInWatchDir) {
+    const readline = await import("readline");
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    
+    const fileDir = path.dirname(watchPath);
+    
+    await new Promise((resolve) => {
+      rl.question(
+        `\n⚠  Warning: File "${watchPath}" is not in any watched directory of plan "${planName}".\n` +
+        `   Current watch_dirs: ${watchDirs.length > 0 ? watchDirs.join(", ") : "none"}\n` +
+        `   Would you like to add its parent directory "${fileDir}" to watch_dirs? (y/n): `,
+        async (answer) => {
+          rl.close();
+          if (answer.trim().toLowerCase() === "y") {
+            const raw = fs.readFileSync(result.filePath, "utf8");
+            const watchDirsRegex = /(watch_dirs\s*=\s*\[)([^\]]*)(\])/s;
+            const match = raw.match(watchDirsRegex);
+            if (match) {
+              const inner = match[2];
+              const entries = inner.match(/"[^"]+"/g) || [];
+              entries.push(`"${fileDir}"`);
+              const newInner = "\n  " + entries.join(",\n  ") + ",\n";
+              const newRaw = raw.replace(watchDirsRegex, match[1] + newInner + match[3]);
+              fs.writeFileSync(result.filePath, newRaw);
+            }
+            console.log(`   Added "${fileDir}" to watch_dirs`);
+          } else {
+            console.log(`   Cancelled. File not collected.`);
+            process.exit(0);
+          }
+          resolve();
+        }
+      );
+    });
+  }
+
+  const planDataDir = dataDir(planName);
+  const destPath = path.join(planDataDir, `${watchPath}.nopatch_latest`);
+  fs.mkdirSync(path.dirname(destPath), { recursive: true });
+  fs.copyFileSync(absPath, destPath);
+  writeMetaFile(absPath, destPath);
+
+  console.log(`max: plan "${planName}" collected file`);
   console.log(`     source: ${absPath}`);
-  console.log(`     timestamp: ${newState.timestamp}`);
+  console.log(`     target: ${destPath}`);
 }
 
 export async function maxRestart(planName) {
@@ -474,22 +548,7 @@ export function maxApply(planNames) {
         } else {
           const rel = path.relative(planDataDir, full).replace(/\\/g, "/");
 
-          if (rel.endsWith(".nopatch_delete")) {
-            const targetRel = rel.slice(0, -".nopatch_delete".length);
-            const targetPath = path.join(cwd, targetRel);
-            if (fs.existsSync(targetPath)) {
-              const stat = fs.statSync(targetPath);
-              if (stat.isDirectory()) {
-                fs.rmSync(targetPath, { recursive: true, force: true });
-              } else {
-                fs.rmSync(targetPath);
-              }
-              console.log(`  [DEL] ${targetRel}`);
-              deleteCount++;
-            } else {
-              console.log(`  [SKIP] ${targetRel} (not found, skip)`);
-            }
-          } else if (rel.endsWith(".nopatch_latest")) {
+          if (rel.endsWith(".nopatch_latest")) {
             const targetRel = rel.slice(0, -".nopatch_latest".length);
             const targetPath = path.join(cwd, targetRel);
             fs.mkdirSync(path.dirname(targetPath), { recursive: true });
@@ -504,6 +563,25 @@ export function maxApply(planNames) {
     }
 
     walk(planDataDir);
+
+    const planResult = readTomlFile(planName);
+    if (planResult && planResult.parsed.delete_paths) {
+      for (const delPath of planResult.parsed.delete_paths) {
+        const targetPath = path.join(cwd, delPath);
+        if (fs.existsSync(targetPath)) {
+          const stat = fs.statSync(targetPath);
+          if (stat.isDirectory()) {
+            fs.rmSync(targetPath, { recursive: true, force: true });
+          } else {
+            fs.rmSync(targetPath);
+          }
+          console.log(`  [DEL] ${delPath}`);
+          deleteCount++;
+        } else {
+          console.log(`  [SKIP DEL] ${delPath} (not found)`);
+        }
+      }
+    }
 
     if (applyCount > 0 || deleteCount > 0) {
       console.log(`max: plan "${planName}" applied (${applyCount} files, ${deleteCount} deletes)`);

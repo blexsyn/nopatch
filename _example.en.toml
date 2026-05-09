@@ -21,6 +21,10 @@
 #   nopatch --max-reset <plan> <file>
 #      (manually set timestamp from a file's modification time)
 #      (does not apply patches, only resets timestamp)
+#      (auto-runs --max-start if plan not started)
+#   nopatch --max-collect-file <plan> <abs-file-path>
+#      (manually collect a single file, no timestamp check)
+#      (prompts to add parent dir to watch_dirs if file not in scope)
 
 # Files or directories to watch for changes
 # Paths are relative to the project root (where package.json is located)
@@ -33,7 +37,8 @@ watch_dirs = [
 
 # Files or directories to delete when applying
 # Paths are relative to the project root (where package.json is located)
-# Example: ["node_modules/some-package/dist/unwanted.js"]
+# ⚠️ Note: Deletion occurs when running nopatch --max-apply, NOT during collection
+# Example: ["node_modules/some-package/dist/unwanted.js", "temp/old-dir"]
 delete_paths = [
   # "node_modules/example-package/deprecated.js",
 ]

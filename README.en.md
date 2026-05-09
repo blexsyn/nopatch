@@ -30,8 +30,9 @@ That's it. A `postinstall` hook is automatically injected into your `package.jso
 | `nopatch --max-start <plan>` | Start Max mode recording (records timestamp, once only) |
 | `nopatch --max-collect <plan>` | Collect changes (full snapshot, once only, restart to collect again) |
 | `nopatch --max-collect-force <plan>` | Force collect (skip collected check, no timestamp reset, no patch release, no lock) |
+| `nopatch --max-collect-file <plan> <file>` | Collect single file (no timestamp check, auto-prompt to add watch dir) |
 | `nopatch --max-restart <plan>` | Restart plan (release data + reset timestamp for next collect) |
-| `nopatch --max-reset <plan> <file>` | Reset plan (use file's mtime as timestamp, does NOT release data) |
+| `nopatch --max-reset <plan> <file>` | Reset plan (use file's mtime as timestamp, does NOT release data, auto-starts if not started) |
 | `nopatch --max-apply [plan...]` | Apply Max collected data (manual, all plans if omitted) |
 | `nopatch --max-diff <plan>` | Diff collected data vs local files (view only) |
 | `nopatch --tpl-apply [plan...]` | Apply templates (manual, all plans if omitted) |
@@ -165,7 +166,7 @@ Records the current timestamp. Cannot be re-executed. Program state is stored in
 
 ### 3. Edit Configuration 、Modify Target Files
 
-Edit `watch_dirs` (supports files and directories, nested paths not allowed) and `delete_paths`.
+Edit `watch_dirs` (supports files and directories, nested paths not allowed) and `delete_paths` (paths to delete when applying patches).
 
 ### 4. After Modifying Files, Collect Changes (once per start or restart)
 
@@ -202,6 +203,25 @@ nopatch --max-reset <plan-name> <file-path>
 ```
 
 Use the specified file's modification time as the new timestamp, **does NOT release data**. Useful after `npm install` to baseline against a freshly installed file.
+
+**Note:** If the plan is not started, it will automatically run `--max-start` first.
+
+### 8. Manually Collect Single File
+
+```bash
+nopatch --max-collect-file <plan-name> <absolute-file-path>
+```
+
+Manually collect a single file, **no timestamp check**.
+
+**Features:**
+- If the file is not within `watch_dirs`, prompts whether to add the file's parent directory to the watch list
+- Confirms and automatically modifies the TOML config file to add a new `watch_dirs` entry
+
+**Example:**
+```bash
+nopatch --max-collect-file myplan /path/to/project/node_modules/some-package/src/file.js
+```
 
 ### Sequence
 

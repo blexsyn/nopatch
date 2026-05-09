@@ -9,6 +9,7 @@ import {
   maxStart,
   maxCollect,
   maxCollectForce,
+  maxCollectFile,
   maxRestart,
   maxReset,
   maxApply,
@@ -47,6 +48,7 @@ Examples:
   nopatch --max-start myplan
   nopatch --max-collect myplan
   nopatch --max-collect-force myplan
+  nopatch --max-collect-file myplan /path/to/file.js
   nopatch --max-restart myplan
   nopatch --max-reset myplan node_modules/debug/package.json
   nopatch --max-apply
@@ -66,6 +68,7 @@ Options:
 const maxStartIndex = args.findIndex((a) => a === "--max-start");
 const maxCollectIndex = args.findIndex((a) => a === "--max-collect");
 const maxCollectForceIndex = args.findIndex((a) => a === "--max-collect-force");
+const maxCollectFileIndex = args.findIndex((a) => a === "--max-collect-file");
 const maxRestartIndex = args.findIndex((a) => a === "--max-restart");
 const maxResetIndex = args.findIndex((a) => a === "--max-reset");
 const maxApplyIndex = args.findIndex((a) => a === "--max-apply");
@@ -74,7 +77,7 @@ const tplApplyIndex = args.findIndex((a) => a === "--tpl-apply");
 const tplVerifyIndex = args.findIndex((a) => a === "--tpl-verify");
 
 const maxFlagIndices = [
-  maxStartIndex, maxCollectIndex, maxRestartIndex, maxResetIndex, maxApplyIndex, maxDiffIndex, tplApplyIndex, tplVerifyIndex,
+  maxStartIndex, maxCollectIndex, maxCollectFileIndex, maxRestartIndex, maxResetIndex, maxApplyIndex, maxDiffIndex, tplApplyIndex, tplVerifyIndex,
 ].filter((i) => i !== -1);
 
 if (maxCollectForceIndex !== -1) {
@@ -123,6 +126,21 @@ if (maxFlagIndices.length > 0) {
       process.exit(1);
     }
     maxCollect(planName);
+    process.exit(0);
+  }
+
+  if (maxCollectFileIndex !== -1) {
+    const planName = args[maxCollectFileIndex + 1];
+    const absFilePath = args[maxCollectFileIndex + 2];
+    if (!planName) {
+      console.error("Error: --max-collect-file requires a plan name");
+      process.exit(1);
+    }
+    if (!absFilePath) {
+      console.error("Error: --max-collect-file requires a file path");
+      process.exit(1);
+    }
+    await maxCollectFile(planName, absFilePath);
     process.exit(0);
   }
 

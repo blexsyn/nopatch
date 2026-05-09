@@ -1,6 +1,6 @@
 {
   "name": "nopatch",
-  "version": "1.2.6",
+  "version": "1.2.13",
   "description": "Lightweight CLI tool for patching and templating npm packages",
   "main": "src/app.js",
   "bin": {
@@ -32,7 +32,7 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
-    "chalk": "^5.3.0",
+    "chalk": "^4.1.2",
     "isbinaryfile": "^5.0.0",
     "mustache": "^4.2.0",
     "simple-git": "^3.22.0",

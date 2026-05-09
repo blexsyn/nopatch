@@ -21,6 +21,10 @@
 #   nopatch --max-reset <plan> <file>
 #      （手动指定时间戳，从指定文件提取修改时间作为新的时间戳）
 #      （不释放补丁，仅重置时间戳）
+#      （如果计划未启动，自动执行 --max-start）
+#   nopatch --max-collect-file <plan> <abs-file-path>
+#      （手动采集单个文件，不检查时间戳）
+#      （如果文件不在 watch_dirs 范围内，会提示添加父目录到监听列表）
 
 # 需要监听变更的文件或目录
 # 路径相对于项目根目录（package.json 所在目录）
@@ -33,7 +37,8 @@ watch_dirs = [
 
 # 释放时需要删除的文件或目录
 # 路径相对于项目根目录（package.json 所在目录）
-# 示例：["node_modules/some-package/dist/unwanted.js"]
+# ⚠️ 注意：删除操作在执行 nopatch --max-apply 时执行，而非采集时
+# 示例：["node_modules/some-package/dist/unwanted.js", "temp/old-dir"]
 delete_paths = [
   # "node_modules/example-package/deprecated.js",
 ]

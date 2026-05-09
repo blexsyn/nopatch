@@ -30,8 +30,9 @@ npm install nopatch --save-dev
 | `nopatch --max-start <plan>` | 启动 Max 模式录制（记录时间戳，不可重复） |
 | `nopatch --max-collect <plan>` | 采集变更（全量快照，仅一次，restart 后可再次采集） |
 | `nopatch --max-collect-force <plan>` | 强制采集（跳过已采集检查，不重置时间戳，不释放补丁，不锁定） |
+| `nopatch --max-collect-file <plan> <file>` | 采集单个文件（不检查时间戳，自动提示添加监听目录） |
 | `nopatch --max-restart <plan>` | 重启计划（释放数据 + 重置时间戳，准备下一轮采集） |
-| `nopatch --max-reset <plan> <file>` | 重置计划（以指定文件的修改时间作为时间戳，不释放数据） |
+| `nopatch --max-reset <plan> <file>` | 重置计划（以指定文件的修改时间作为时间戳，不释放数据，未启动则自动 start） |
 | `nopatch --max-apply [plan...]` | 应用 Max 采集数据（手动，省略计划名则全部） |
 | `nopatch --max-diff <plan>` | 对比采集数据与本地文件差异（仅供查看） |
 | `nopatch --tpl-apply [plan...]` | 应用模板（手动，省略计划名则全部） |
@@ -165,7 +166,7 @@ nopatch --max-start <plan-name>
 
 ### 3. 编辑配置、修改目标文件
 
-编辑 `watch_dirs`（支持文件和目录，不允许嵌套路径）和 `delete_paths`。
+编辑 `watch_dirs`（支持文件和目录，不允许嵌套路径）和 `delete_paths`（释放补丁时删除的路径）。
 
 ### 4. 修改文件后，采集变更（每次 start 或 restart 后仅一次）
 
@@ -202,6 +203,25 @@ nopatch --max-reset <plan-name> <file-path>
 ```
 
 以指定文件的修改时间作为新时间戳，**不释放数据**。适用于 `npm install` 后以某个新安装文件的时间为基准。
+
+**注意：** 如果计划未启动，会自动先执行 `--max-start`。
+
+### 8. 手动采集单个文件
+
+```bash
+nopatch --max-collect-file <plan-name> <absolute-file-path>
+```
+
+手动采集单个文件，**不检查时间戳**。
+
+**特性：**
+- 如果文件不在 `watch_dirs` 范围内，会提示是否将文件父目录添加到监听列表
+- 确认后会自动修改 TOML 配置文件并添加新的 `watch_dirs` 条目
+
+**示例：**
+```bash
+nopatch --max-collect-file myplan /path/to/project/node_modules/some-package/src/file.js
+```
 
 ### 时序
 
