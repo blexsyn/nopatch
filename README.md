@@ -35,6 +35,9 @@ npm install nopatch --save-dev
 | `nopatch --max-reset <plan> <file>` | 重置计划（以指定文件的修改时间作为时间戳，不释放数据，未启动则自动 start） |
 | `nopatch --max-apply [plan...]` | 应用 Max 采集数据（手动，省略计划名则全部） |
 | `nopatch --max-diff <plan>` | 对比采集数据与本地文件差异（仅供查看） |
+| `nopatch --min <filepathabs>` | 采集指定文件到 min_mode（覆盖） |
+| `nopatch --min-del <filepathabs>` | 标记文件/目录在 apply 时删除 |
+| `nopatch --min-apply` | 还原 min_mode 中的所有文件（手动） |
 | `nopatch --tpl-apply [plan...]` | 应用模板（手动，省略计划名则全部） |
 | `nopatch --tpl-verify <plan>` | 验证模板计划（检查配置、文件、变量） |
 | `nopatch --debug` | 显示详细调试日志 |
@@ -145,6 +148,36 @@ nopatch --tpl-apply
 # 释放指定计划
 nopatch --tpl-apply myplan
 ```
+
+---
+
+## Min 模式
+
+轻量级文件强制采集模式。无需配置，直接指定文件路径，复制到 `nopatch/min_mode/` 下保存，手动还原。
+
+### 采集文件
+
+```bash
+nopatch --min /absolute/path/to/file.js
+```
+
+将指定文件复制到 `nopatch/min_mode/<相对路径>`（覆盖）。可多次执行，每次覆盖上一次的内容。
+
+### 标记删除
+
+```bash
+nopatch --min-del /absolute/path/to/file.js
+```
+
+在 `nopatch/min_mode/` 下创建 `.nopatch_delete` 标记文件，apply 时删除对应的目标文件或目录。
+
+### 还原文件
+
+```bash
+nopatch --min-apply
+```
+
+将 `nopatch/min_mode/` 下的所有文件还原到项目对应位置。**不会在 `npm install` 时自动执行，需手动触发。**
 
 ---
 
@@ -287,6 +320,11 @@ nopatch/
         some-pkg/
           index.js.nopatch_latest
           old.js.nopatch_delete
+
+  min_mode/                # Min 模式采集文件
+    node_modules/
+      some-pkg/
+        index.js
 ```
 
 ---

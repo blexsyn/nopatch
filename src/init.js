@@ -16,6 +16,7 @@ const DIRS = [
   "tpl_config",
   "max_mode_config",
   "max_mode_data",
+  "min_mode",
 ];
 
 const COPY_FILES = [

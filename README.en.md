@@ -35,6 +35,9 @@ That's it. A `postinstall` hook is automatically injected into your `package.jso
 | `nopatch --max-reset <plan> <file>` | Reset plan (use file's mtime as timestamp, does NOT release data, auto-starts if not started) |
 | `nopatch --max-apply [plan...]` | Apply Max collected data (manual, all plans if omitted) |
 | `nopatch --max-diff <plan>` | Diff collected data vs local files (view only) |
+| `nopatch --min <filepathabs>` | Collect file into min_mode (overwrite) |
+| `nopatch --min-del <filepathabs>` | Mark file/dir for deletion on apply |
+| `nopatch --min-apply` | Restore all min_mode files to original locations (manual) |
 | `nopatch --tpl-apply [plan...]` | Apply templates (manual, all plans if omitted) |
 | `nopatch --tpl-verify <plan>` | Verify template plan (check config, files, variables) |
 | `nopatch --debug` | Show detailed debug output |
@@ -145,6 +148,36 @@ nopatch --tpl-apply
 # Apply specific plan
 nopatch --tpl-apply myplan
 ```
+
+---
+
+## Min Mode
+
+Lightweight forced file collection. No config needed — just specify a file path, copy it into `nopatch/min_mode/`, and restore manually when needed.
+
+### Collect a File
+
+```bash
+nopatch --min /absolute/path/to/file.js
+```
+
+Copies the file to `nopatch/min_mode/<relative path>` (overwrite). Can be run multiple times; each run overwrites the previous copy.
+
+### Mark for Deletion
+
+```bash
+nopatch --min-del /absolute/path/to/file.js
+```
+
+Creates a `.nopatch_delete` marker under `nopatch/min_mode/`. On apply, the corresponding target file or directory will be deleted.
+
+### Restore Files
+
+```bash
+nopatch --min-apply
+```
+
+Restores all files under `nopatch/min_mode/` to their original locations. **Not automatic on `npm install` — must be triggered manually.**
 
 ---
 
@@ -287,6 +320,11 @@ nopatch/
         some-pkg/
           index.js.nopatch_latest
           old.js.nopatch_delete
+
+  min_mode/                # Min mode collected files
+    node_modules/
+      some-pkg/
+        index.js
 ```
 
 ---

@@ -14,6 +14,7 @@ import {
   maxReset,
   maxApply,
 } from "./maxMode.js";
+import { minCollect, minApply, minDel } from "./minMode.js";
 
 const args = process.argv.slice(2);
 
@@ -37,6 +38,11 @@ Max mode:
   nopatch --max-apply [plan...]    Apply collected data (manual only, all plans if omitted)
   nopatch --max-diff <plan>        Diff collected data vs current files (view only)
 
+Min mode:
+  nopatch --min <filepathabs>      Copy file into nopatch/min_mode (overwrite)
+  nopatch --min-del <filepathabs>  Mark file/dir for deletion on apply
+  nopatch --min-apply              Restore all min_mode files to their original locations
+
 Template:
   nopatch --tpl-apply [plan...]    Apply templates (manual only, all plans if omitted)
   nopatch --tpl-verify <plan>      Verify template plan (check config, files, variables)
@@ -53,6 +59,9 @@ Examples:
   nopatch --max-reset myplan node_modules/debug/package.json
   nopatch --max-apply
   nopatch --max-diff myplan
+  nopatch --min /abs/path/to/file.js
+  nopatch --min-del /abs/path/to/file.js
+  nopatch --min-apply
   nopatch --tpl-apply
   nopatch --tpl-apply myplan
   nopatch --tpl-verify myplan
@@ -75,10 +84,38 @@ const maxApplyIndex = args.findIndex((a) => a === "--max-apply");
 const maxDiffIndex = args.findIndex((a) => a === "--max-diff");
 const tplApplyIndex = args.findIndex((a) => a === "--tpl-apply");
 const tplVerifyIndex = args.findIndex((a) => a === "--tpl-verify");
+const minIndex = args.findIndex((a) => a === "--min");
+const minApplyIndex = args.findIndex((a) => a === "--min-apply");
+const minDelIndex = args.findIndex((a) => a === "--min-del");
 
 const maxFlagIndices = [
   maxStartIndex, maxCollectIndex, maxCollectFileIndex, maxRestartIndex, maxResetIndex, maxApplyIndex, maxDiffIndex, tplApplyIndex, tplVerifyIndex,
 ].filter((i) => i !== -1);
+
+if (minIndex !== -1) {
+  const filePath = args[minIndex + 1];
+  if (!filePath) {
+    console.error("Error: --min requires a file path");
+    process.exit(1);
+  }
+  minCollect(filePath);
+  process.exit(0);
+}
+
+if (minDelIndex !== -1) {
+  const filePath = args[minDelIndex + 1];
+  if (!filePath) {
+    console.error("Error: --min-del requires a file path");
+    process.exit(1);
+  }
+  minDel(filePath);
+  process.exit(0);
+}
+
+if (minApplyIndex !== -1) {
+  minApply();
+  process.exit(0);
+}
 
 if (maxCollectForceIndex !== -1) {
   const planName = args[maxCollectForceIndex + 1];
@@ -217,7 +254,7 @@ const patchFlag = args.find((a) => a.startsWith("--patch="))?.split("=")[1]
 const knownFlags = [
   "--patch", "--help", "-h", "--debug",
   "--max-start", "--max-collect", "--max-collect-force", "--max-restart", "--max-reset", "--max-apply", "--max-diff",
-  "--tpl-apply", "--tpl-verify",
+  "--tpl-apply", "--tpl-verify", "--min", "--min-apply", "--min-del",
 ];
 const unknownFlags = args.filter(
   (a) =>
