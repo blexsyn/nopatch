@@ -42,6 +42,8 @@ Min mode:
   nopatch --min <filepathabs>      Copy file into nopatch/min_mode (overwrite)
   nopatch --min-del <filepathabs>  Mark file/dir for deletion on apply
   nopatch --min-apply              Restore all min_mode files to their original locations
+  nopatch --min-apply --include <dir> [--existing-only]
+                                  Restore only matching min_mode path(s)
 
 Template:
   nopatch --tpl-apply [plan...]    Apply templates (manual only, all plans if omitted)
@@ -62,6 +64,8 @@ Examples:
   nopatch --min /abs/path/to/file.js
   nopatch --min-del /abs/path/to/file.js
   nopatch --min-apply
+  nopatch --min-apply --include node_modules
+  nopatch --min-apply --include ios/Pods --existing-only
   nopatch --tpl-apply
   nopatch --tpl-apply myplan
   nopatch --tpl-verify myplan
@@ -113,7 +117,22 @@ if (minDelIndex !== -1) {
 }
 
 if (minApplyIndex !== -1) {
-  minApply();
+  const includePaths = [];
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === "--include") {
+      const includePath = args[i + 1];
+      if (!includePath) {
+        console.error("Error: --include requires a directory path");
+        process.exit(1);
+      }
+      includePaths.push(includePath);
+      i++;
+    }
+  }
+  minApply({
+    includePaths,
+    existingOnly: args.includes("--existing-only"),
+  });
   process.exit(0);
 }
 

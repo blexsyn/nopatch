@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import { spawnSync } from "child_process";
 import { error } from "./utils.js";
 
 const NOPATCH_DIR = "nopatch";
@@ -8,6 +9,37 @@ const DEL_SUFFIX = ".nopatch_delete";
 
 function minDir() {
   return path.join(process.cwd(), NOPATCH_DIR, MIN_DIR);
+}
+
+function isMacPermissionError(err) {
+  return process.platform === "darwin" && err && (err.code === "EACCES" || err.code === "EPERM");
+}
+
+function runBestEffort(command, args) {
+  try {
+    spawnSync(command, args, { stdio: "ignore" });
+  } catch (_) {
+    // best effort only
+  }
+}
+
+function repairMacWritePermission(targetPath) {
+  const targetDir = path.dirname(targetPath);
+  runBestEffort("chflags", ["nouchg", targetPath]);
+  runBestEffort("chflags", ["nouchg", targetDir]);
+  runBestEffort("chmod", ["u+rw", targetPath]);
+  runBestEffort("chmod", ["u+rwx", targetDir]);
+}
+
+function copyFileWithPermissionRepair(sourcePath, targetPath) {
+  try {
+    fs.copyFileSync(sourcePath, targetPath);
+    return;
+  } catch (err) {
+    if (!isMacPermissionError(err)) throw err;
+    repairMacWritePermission(targetPath);
+    fs.copyFileSync(sourcePath, targetPath);
+  }
 }
 
 /**
@@ -71,13 +103,33 @@ export function minDel(filePath) {
  * 将 nopatch/min_mode 下的所有文件还原到项目对应位置
  * Restore all files from nopatch/min_mode to their original locations
  */
-export function minApply() {
+function normalizeRelPath(relPath) {
+  return relPath.replace(/\\/g, "/").replace(/^\/+/, "").replace(/\/+$/, "");
+}
+
+function normalizeIncludePaths(includePaths) {
+  if (!Array.isArray(includePaths)) return [];
+  return includePaths
+    .map((p) => normalizeRelPath(String(p || "")))
+    .filter(Boolean);
+}
+
+function matchesInclude(relPath, includePaths) {
+  if (!includePaths || includePaths.length === 0) return true;
+  const rel = normalizeRelPath(relPath);
+  return includePaths.some((includePath) => rel === includePath || rel.startsWith(includePath + "/"));
+}
+
+export function minApply(options = {}) {
   const base = minDir();
   if (!fs.existsSync(base)) return;
 
   const cwd = process.cwd();
+  const includePaths = normalizeIncludePaths(options.includePaths);
+  const existingOnly = Boolean(options.existingOnly);
   let addCount = 0;
   let delCount = 0;
+  let skipCount = 0;
 
   function walk(dir) {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -88,6 +140,7 @@ export function minApply() {
         const rel = path.relative(base, full).replace(/\\/g, "/");
         if (rel.endsWith(DEL_SUFFIX)) {
           const targetRel = rel.slice(0, -DEL_SUFFIX.length);
+          if (!matchesInclude(targetRel, includePaths)) continue;
           const targetPath = path.join(cwd, targetRel);
           if (fs.existsSync(targetPath)) {
             const stat = fs.statSync(targetPath);
@@ -102,9 +155,15 @@ export function minApply() {
           }
           delCount++;
         } else {
+          if (!matchesInclude(rel, includePaths)) continue;
           const targetPath = path.join(cwd, rel);
+          if (existingOnly && !fs.existsSync(path.dirname(targetPath))) {
+            console.log(`  [SKIP ADD] ${rel} (target directory not found)`);
+            skipCount++;
+            continue;
+          }
           fs.mkdirSync(path.dirname(targetPath), { recursive: true });
-          fs.copyFileSync(full, targetPath);
+          copyFileWithPermissionRepair(full, targetPath);
           console.log(`  [ADD] ${rel}`);
           addCount++;
         }
@@ -114,7 +173,7 @@ export function minApply() {
 
   walk(base);
 
-  if (addCount > 0 || delCount > 0) {
-    console.log(`min: ${addCount} file(s) added, ${delCount} deletion(s) applied`);
+  if (addCount > 0 || delCount > 0 || skipCount > 0) {
+    console.log(`min: ${addCount} file(s) added, ${delCount} deletion(s) applied, ${skipCount} skipped`);
   }
 }
