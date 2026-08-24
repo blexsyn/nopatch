@@ -12,3 +12,4 @@ ignore
 *.iml
 *.iws
 *.ipr
+.npm-cache
