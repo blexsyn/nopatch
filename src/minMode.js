@@ -120,6 +120,21 @@ function matchesInclude(relPath, includePaths) {
   return includePaths.some((includePath) => rel === includePath || rel.startsWith(includePath + "/"));
 }
 
+function findExistingOnlyRoot(cwd, relPath) {
+  const rel = normalizeRelPath(relPath);
+  const parts = rel.split("/").filter(Boolean);
+  if (parts[0] === "node_modules" && parts[1]) {
+    if (parts[1].startsWith("@") && parts[2]) {
+      return path.join(cwd, parts[0], parts[1], parts[2]);
+    }
+    return path.join(cwd, parts[0], parts[1]);
+  }
+  if (parts[0] === "ios" && parts[1] === "Pods" && parts[2]) {
+    return path.join(cwd, parts[0], parts[1], parts[2]);
+  }
+  return path.join(cwd, path.dirname(rel));
+}
+
 export function minApply(options = {}) {
   const base = minDir();
   if (!fs.existsSync(base)) return;
@@ -157,8 +172,9 @@ export function minApply(options = {}) {
         } else {
           if (!matchesInclude(rel, includePaths)) continue;
           const targetPath = path.join(cwd, rel);
-          if (existingOnly && !fs.existsSync(path.dirname(targetPath))) {
-            console.log(`  [SKIP ADD] ${rel} (target directory not found)`);
+          const existingOnlyRoot = findExistingOnlyRoot(cwd, rel);
+          if (existingOnly && !fs.existsSync(existingOnlyRoot)) {
+            console.log(`  [SKIP ADD] ${rel} (target root not found: ${path.relative(cwd, existingOnlyRoot).replace(/\\/g, "/")})`);
             skipCount++;
             continue;
           }
